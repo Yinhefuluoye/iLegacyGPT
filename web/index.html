@@ -13,7 +13,16 @@
 <div class="app" id="app">
 
   <header class="topbar">
-    <div class="wordmark">对话</div>
+    <div class="topbar-left">
+      <button class="icon-btn menu-btn" id="menuBtn" type="button" aria-label="会话列表">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" aria-hidden="true">
+          <path d="M4 7h16"></path>
+          <path d="M4 12h16"></path>
+          <path d="M4 17h11"></path>
+        </svg>
+      </button>
+      <div class="wordmark">对话</div>
+    </div>
     <div class="topbar-actions">
       <button class="ghost-btn" id="newChatBtn" type="button">新对话</button>
       <button class="icon-btn" id="settingsBtn" type="button" aria-label="设置">
@@ -24,6 +33,23 @@
       </button>
     </div>
   </header>
+
+  <!-- 会话抽屉 -->
+  <div class="drawer-layer" id="drawerLayer" aria-hidden="true">
+    <div class="drawer-scrim" id="drawerScrim"></div>
+    <aside class="drawer" id="drawer" role="dialog" aria-modal="true" aria-label="会话列表">
+      <div class="drawer-head">
+        <h2>会话</h2>
+        <button class="sheet-close" id="drawerClose" type="button" aria-label="关闭">×</button>
+      </div>
+      <div class="drawer-list" id="sessionList"></div>
+      <div class="drawer-foot">
+        <button class="drawer-new" id="drawerNew" type="button">
+          <span class="drawer-new-plus">+</span><span>新对话</span>
+        </button>
+      </div>
+    </aside>
+  </div>
 
   <main class="stage">
     <section class="hero" id="hero">

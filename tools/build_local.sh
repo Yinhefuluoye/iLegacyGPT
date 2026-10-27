@@ -25,6 +25,10 @@ if [ ! -d "$SDK" ]; then
   exit 1
 fi
 
+# A Windows git checkout stores the SDK's YAML stubs with CRLF line endings,
+# which ld64 reports as "unsupported tapi file type '!tapi-tbd-v2". Normalise.
+find "$SDK" -name '*.tbd' -type f -exec sed -i 's/\r$//' {} + 2>/dev/null || true
+
 python3 tools/patch_sdk.py --sdk "$SDK"
 
 echo "==> building (armv7 / iOS 10.3)…"
@@ -33,11 +37,19 @@ echo "==> building (armv7 / iOS 10.3)…"
   exit 1
 }
 
-APP="$(find ios/.theos/obj -type d -name 'ChatAI.app' | head -n 1)"
+# Theos keeps the link output under .theos/obj and the staged bundle with its
+# resources under .theos/_ — pick whichever directory actually has Info.plist.
+APP="$(find ios/.theos -type d -name 'ChatAI.app' 2>/dev/null | while read -r d; do
+  if [ -f "$d/Info.plist" ]; then echo "$d"; break; fi
+done)"
 if [ -z "$APP" ]; then
-  echo "error: ChatAI.app not found under ios/.theos/obj" >&2
+  APP="$(find ios/.theos -type d -name 'ChatAI.app' 2>/dev/null | head -n 1)"
+fi
+if [ -z "$APP" ]; then
+  echo "error: ChatAI.app not found under ios/.theos" >&2
   exit 1
 fi
+echo "==> bundle: $APP"
 
 VERSION="${VERSION:-0.1.local}"
 python3 tools/package_ipa.py \

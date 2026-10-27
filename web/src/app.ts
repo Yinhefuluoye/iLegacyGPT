@@ -55,10 +55,24 @@ function formatBytes(bytes: number): string {
   return (bytes / 1024 / 1024).toFixed(1) + ' MB';
 }
 
+function pad2(n: number): string {
+  return (n < 10 ? '0' : '') + n;
+}
+
+interface Session {
+  id: string;
+  title: string;
+  createdAt: number;
+  updatedAt: number;
+  messages: Message[];
+}
+
 export class App {
   private bridge: Bridge;
   private config: any = {};
   private messages: Message[] = [];
+  private sessions: Session[] = [];
+  private currentId = '';
   private requestId = '';
   private streaming = false;
   private attach: { dataBase64: string; mime: string; bytes?: number } | null = null;
@@ -88,6 +102,9 @@ export class App {
   private thinkList!: HTMLElement;
   private toastEl!: HTMLElement;
   private toastTimer = 0;
+  private drawerLayer!: HTMLElement;
+  private drawerScrim!: HTMLElement;
+  private sessionList!: HTMLElement;
 
   constructor(bridge: Bridge) {
     this.bridge = bridge;
@@ -118,13 +135,9 @@ export class App {
 
     try {
       const store = await this.bridge.request('store.load', undefined, 'store', 8000);
-      const data = store.data || {};
-      const list = Array.isArray(data.messages) ? data.messages : [];
-      this.messages = list
-        .filter((m: any) => m && (m.role === 'user' || m.role === 'assistant') && typeof m.content === 'string')
-        .map((m: any) => ({ id: m.id || uid(), role: m.role, content: m.content, image: m.image || null, ts: m.ts || 0 }));
+      this.loadSessions((store.data || {}) as any);
     } catch (e) {
-      this.messages = [];
+      this.loadSessions({});
     }
     this.renderAll();
   }
@@ -151,6 +164,9 @@ export class App {
     this.modelCount = $('modelCount');
     this.thinkList = $('thinkList');
     this.toastEl = $('toast');
+    this.drawerLayer = $('drawerLayer');
+    this.drawerScrim = $('drawerScrim');
+    this.sessionList = $('sessionList');
   }
 
   private on(node: any, ev: string, fn: (e: any) => void): void {
@@ -214,6 +230,33 @@ export class App {
     this.on($('apiKey'), 'change', () => this.saveSettings());
     this.on($('refreshModelsBtn'), 'click', () => this.fetchModels());
     this.on($('clearChatBtn'), 'click', () => this.clearAll());
+
+    // session drawer
+    this.on($('menuBtn'), 'click', () => this.openDrawer());
+    this.on($('drawerClose'), 'click', () => this.closeDrawer());
+    this.on(this.drawerScrim, 'click', () => this.closeDrawer());
+    this.on($('drawerNew'), 'click', () => this.newChat());
+    this.on(this.sessionList, 'click', (e: any) => {
+      const target = e.target as HTMLElement;
+      const row = target.closest ? (target.closest('.session-row') as HTMLElement | null) : null;
+      if (!row) {
+        return;
+      }
+      const id = row.getAttribute('data-id') || '';
+      if (!id) {
+        return;
+      }
+      if (target.classList && target.classList.contains('session-del')) {
+        this.deleteSession(id);
+        return;
+      }
+      this.switchSession(id);
+    });
+    this.on(window, 'keydown', (e: any) => {
+      if (e.key === 'Escape' && this.drawerLayer.classList.contains('is-open')) {
+        this.closeDrawer();
+      }
+    });
 
     this.on(window, 'resize', () => this.scrollToBottom(true));
   }
@@ -528,6 +571,7 @@ export class App {
     this.autogrow();
     this.clearAttach();
     this.enterChat();
+    this.touchCurrent();
     this.renderAll();
     this.scrollToBottom(true);
     this.saveStore();
@@ -637,6 +681,7 @@ export class App {
         last.content = ok ? '（空回复）' : '（已停止）';
       }
     }
+    this.touchCurrent();
     this.saveStore();
     this.scrollToBottom(true);
   }
@@ -667,6 +712,8 @@ export class App {
     box.appendChild(body);
     box.appendChild(retry);
     this.threadInner.appendChild(box);
+    this.touchCurrent();
+    this.saveStore();
     this.scrollToBottom(true);
   }
 
@@ -693,8 +740,10 @@ export class App {
 
   private renderAll(): void {
     this.threadInner.innerHTML = '';
-    const has = this.messages.length > 0;
-    if (has) {
+    if (!this.messages.length) {
+      this.app.classList.remove('chat');
+      this.heroComposer.appendChild(this.composer);
+    } else {
       this.enterChat();
     }
     for (let i = 0; i < this.messages.length; i++) {
@@ -765,39 +814,247 @@ export class App {
     }
     this.saveTimer = window.setTimeout(() => {
       this.saveTimer = 0;
-      const data = {
-        messages: this.messages.map((m) => ({
+      const sessions = this.sessions.map((s) => ({
+        id: s.id,
+        title: s.title,
+        createdAt: s.createdAt,
+        updatedAt: s.updatedAt,
+        messages: s.messages.slice(-120).map((m) => ({
           id: m.id,
           role: m.role,
           content: m.content,
-          image: m.image || null,
           ts: m.ts || 0
         }))
-      };
-      this.bridge.post('store.save', { data: data });
+      }));
+      this.bridge.post('store.save', { data: { v: 2, sessions: sessions, currentId: this.currentId } });
     }, 700);
+  }
+
+  /* ----------------------------------------------------------- sessions -- */
+
+  private current(): Session | null {
+    for (let i = 0; i < this.sessions.length; i++) {
+      if (this.sessions[i].id === this.currentId) {
+        return this.sessions[i];
+      }
+    }
+    return this.sessions.length ? this.sessions[0] : null;
+  }
+
+  private makeSession(messages: Message[]): Session {
+    const now = Date.now();
+    return {
+      id: 's' + now.toString(36) + Math.random().toString(36).slice(2, 6),
+      title: this.titleFor(messages),
+      createdAt: now,
+      updatedAt: now,
+      messages: messages
+    };
+  }
+
+  private normalizeMessages(list: any): Message[] {
+    return (Array.isArray(list) ? list : [])
+      .filter((m: any) => m && (m.role === 'user' || m.role === 'assistant') && typeof m.content === 'string')
+      .map((m: any) => ({ id: m.id || uid(), role: m.role, content: m.content, image: m.image || null, ts: m.ts || 0 }));
+  }
+
+  private loadSessions(data: any): void {
+    const raw = Array.isArray(data.sessions) ? data.sessions : null;
+    const loaded: Session[] = [];
+    if (raw) {
+      for (let i = 0; i < raw.length; i++) {
+        const s = raw[i];
+        if (!s || typeof s !== 'object') {
+          continue;
+        }
+        const msgs = this.normalizeMessages(s.messages || []);
+        const now = Date.now();
+        loaded.push({
+          id: typeof s.id === 'string' && s.id ? s.id : 's' + now.toString(36) + i,
+          title: typeof s.title === 'string' && s.title ? s.title : this.titleFor(msgs),
+          createdAt: Number(s.createdAt) || now,
+          updatedAt: Number(s.updatedAt) || now,
+          messages: msgs
+        });
+      }
+    } else {
+      const legacy = this.normalizeMessages(data.messages || []);
+      if (legacy.length) {
+        loaded.push(this.makeSession(legacy));
+      }
+    }
+    this.sessions = loaded.length ? loaded : [this.makeSession([])];
+    const wanted = typeof data.currentId === 'string' ? data.currentId : '';
+    let active = this.sessions[0];
+    for (let i = 0; i < this.sessions.length; i++) {
+      if (this.sessions[i].id === wanted) {
+        active = this.sessions[i];
+      }
+    }
+    this.currentId = active.id;
+    this.messages = active.messages;
+  }
+
+  private titleFor(messages: Message[]): string {
+    for (let i = 0; i < messages.length; i++) {
+      const m = messages[i];
+      if (m.role === 'user' && m.content && m.content.trim()) {
+        const text = m.content.replace(/\s+/g, ' ').trim();
+        return text.length > 22 ? text.slice(0, 22) + '…' : text;
+      }
+    }
+    return '新对话';
+  }
+
+  private touchCurrent(): void {
+    const s = this.current();
+    if (!s) {
+      return;
+    }
+    s.updatedAt = Date.now();
+    s.title = this.titleFor(s.messages);
+    if (this.drawerLayer && this.drawerLayer.classList.contains('is-open')) {
+      this.renderSessions();
+    }
+  }
+
+  private sessionTime(ts: number): string {
+    const d = new Date(ts || Date.now());
+    const now = new Date();
+    const sameDay = (a: Date, b: Date) =>
+      a.getFullYear() === b.getFullYear() && a.getMonth() === b.getMonth() && a.getDate() === b.getDate();
+    if (sameDay(d, now)) {
+      return pad2(d.getHours()) + ':' + pad2(d.getMinutes());
+    }
+    const yesterday = new Date(now.getTime() - 86400000);
+    if (sameDay(d, yesterday)) {
+      return '昨天';
+    }
+    if (d.getFullYear() === now.getFullYear()) {
+      return d.getMonth() + 1 + '月' + d.getDate() + '日';
+    }
+    return d.getFullYear() + '/' + (d.getMonth() + 1) + '/' + d.getDate();
+  }
+
+  private renderSessions(): void {
+    if (!this.sessionList) {
+      return;
+    }
+    this.sessionList.innerHTML = '';
+    const sorted = this.sessions.slice().sort((a, b) => (b.updatedAt || 0) - (a.updatedAt || 0));
+    for (let i = 0; i < sorted.length; i++) {
+      const s = sorted[i];
+      const row = el('div', 'session-row' + (s.id === this.currentId ? ' is-active' : ''));
+      row.setAttribute('data-id', s.id);
+      const item = el('button', 'session-item') as HTMLButtonElement;
+      item.type = 'button';
+      item.appendChild(el('span', 'session-title', s.title || '新对话'));
+      item.appendChild(el('span', 'session-time', this.sessionTime(s.updatedAt)));
+      const del = el('button', 'session-del', '×') as HTMLButtonElement;
+      del.type = 'button';
+      del.setAttribute('aria-label', '删除会话');
+      row.appendChild(item);
+      row.appendChild(del);
+      this.sessionList.appendChild(row);
+    }
+  }
+
+  private openDrawer(): void {
+    this.renderSessions();
+    this.drawerLayer.classList.add('is-open');
+    this.drawerLayer.setAttribute('aria-hidden', 'false');
+  }
+
+  private closeDrawer(): void {
+    this.drawerLayer.classList.remove('is-open');
+    this.drawerLayer.setAttribute('aria-hidden', 'true');
+  }
+
+  private switchSession(id: string): void {
+    if (id === this.currentId) {
+      this.closeDrawer();
+      return;
+    }
+    let next: Session | null = null;
+    for (let i = 0; i < this.sessions.length; i++) {
+      if (this.sessions[i].id === id) {
+        next = this.sessions[i];
+      }
+    }
+    if (!next) {
+      return;
+    }
+    if (this.streaming) {
+      this.stop();
+    }
+    this.currentId = next.id;
+    this.messages = next.messages;
+    this.renderAll();
+    this.closeDrawer();
+    this.saveStore();
+  }
+
+  private deleteSession(id: string): void {
+    let idx = -1;
+    for (let i = 0; i < this.sessions.length; i++) {
+      if (this.sessions[i].id === id) {
+        idx = i;
+      }
+    }
+    if (idx < 0) {
+      return;
+    }
+    const wasCurrent = id === this.currentId;
+    this.sessions.splice(idx, 1);
+    if (!this.sessions.length) {
+      this.sessions.push(this.makeSession([]));
+    }
+    if (wasCurrent) {
+      if (this.streaming) {
+        this.stop();
+      }
+      const next = this.sessions[this.sessions.length - 1];
+      this.currentId = next.id;
+      this.messages = next.messages;
+      this.renderAll();
+    }
+    this.renderSessions();
+    this.saveStore();
+    this.toast('已删除会话');
   }
 
   private newChat(): void {
     if (this.streaming) {
       this.stop();
     }
-    this.messages = [];
-    this.threadInner.innerHTML = '';
-    this.app.classList.remove('chat');
-    this.heroComposer.appendChild(this.composer);
-    this.bridge.post('store.clear');
+    const cur = this.current();
+    if (cur && cur.messages.length === 0) {
+      this.closeDrawer();
+      this.renderAll();
+      return;
+    }
+    const s = this.makeSession([]);
+    this.sessions.push(s);
+    this.currentId = s.id;
+    this.messages = s.messages;
+    this.renderAll();
+    this.closeDrawer();
+    this.saveStore();
     this.toast('新对话');
   }
 
   private clearAll(): void {
-    this.messages = [];
-    this.threadInner.innerHTML = '';
-    this.app.classList.remove('chat');
-    this.heroComposer.appendChild(this.composer);
-    this.bridge.post('store.clear');
+    const s = this.current();
+    if (s) {
+      s.messages = [];
+      s.title = '新对话';
+      s.updatedAt = Date.now();
+      this.messages = s.messages;
+    }
+    this.renderAll();
+    this.saveStore();
     this.closeOverlay($('settingsOverlay'));
-    this.toast('已清空对话');
+    this.toast('已清空当前对话');
   }
 
   /* -------------------------------------------------------------- sheets -- */

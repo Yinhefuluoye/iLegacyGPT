@@ -106,7 +106,7 @@ export class Bridge {
       return;
     }
     if (op === 'store.load') {
-      this.receive({ type: 'store', data: { messages: [] } });
+      this.receive({ type: 'store', data: MOCK_STORE });
       return;
     }
     if (op === 'store.save' || op === 'store.clear') {
@@ -160,6 +160,64 @@ export class Bridge {
     }
   }
 }
+
+/* Desktop preview only: pretend there is already a little archive on disk. */
+const NOW = Date.now();
+const DAY = 86400000;
+const MOCK_STORE: any = {
+  v: 2,
+  currentId: 's-demo-1',
+  sessions: [
+    {
+      id: 's-demo-1',
+      title: '帮我简化 iPad 客户端交互',
+      createdAt: NOW - 2 * DAY,
+      updatedAt: NOW - 3 * 60000,
+      messages: [
+        { id: 'm1', role: 'user', content: '帮我简化 iPad 客户端的交互', ts: NOW - 3 * 60000 },
+        {
+          id: 'm2',
+          role: 'assistant',
+          content:
+            '好的，先给你一个最小可行方案：\n\n' +
+            '- 界面只保留一个输入入口和一处设置\n' +
+            '- 网络层只做一个转发接口，不做账号体系\n' +
+            '- 配置全部存在本机，换模型时不改动界面',
+          ts: NOW - 3 * 60000 + 1200
+        }
+      ]
+    },
+    {
+      id: 's-demo-2',
+      title: '把思考档位加到输入框',
+      createdAt: NOW - DAY,
+      updatedAt: NOW - DAY,
+      messages: [
+        { id: 'm3', role: 'user', content: '把思考档位加到输入框', ts: NOW - DAY },
+        {
+          id: 'm4',
+          role: 'assistant',
+          content: '可以做成一枚 chip：关闭 / 低 / 中 / 高，换算成 reasoning_effort 的 low、medium、high。',
+          ts: NOW - DAY + 2000
+        }
+      ]
+    },
+    {
+      id: 's-demo-3',
+      title: 'OpenAI 兼容接口的流式解析',
+      createdAt: NOW - 4 * DAY,
+      updatedAt: NOW - 3 * DAY,
+      messages: [{ id: 'm5', role: 'user', content: 'OpenAI 兼容接口的流式解析', ts: NOW - 3 * DAY }]
+    },
+    {
+      id: 's-demo-4',
+      title: '确认浅色主题的配色',
+      createdAt: NOW - 6 * DAY,
+      updatedAt: NOW - 5 * DAY,
+      messages: [{ id: 'm6', role: 'user', content: '确认浅色主题的配色', ts: NOW - 5 * DAY }]
+    }
+  ]
+};
 
 export const MOCK_CONFIG: any = {
   provider: 'DeepSeek',

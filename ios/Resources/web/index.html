@@ -729,6 +729,67 @@ svg { display: block; }
   .chip { margin-right: 5px; }
   .sheet { max-height: 92%; }
 }
+/* ---------- 会话抽屉 ---------- */
+.topbar-left { display: flex; align-items: center; gap: 4px; }
+.menu-btn { margin-left: -8px; }
+
+.drawer-layer { position: fixed; inset: 0; z-index: 60; pointer-events: none; }
+.drawer-layer.is-open { pointer-events: auto; }
+.drawer-scrim {
+  position: absolute; inset: 0;
+  background: rgba(24, 24, 20, 0.30);
+  opacity: 0; transition: opacity 0.18s ease;
+}
+.drawer-layer.is-open .drawer-scrim { opacity: 1; }
+.drawer {
+  position: absolute; left: 0; top: 0; bottom: 0;
+  width: 296px; max-width: 82vw;
+  display: flex; flex-direction: column;
+  padding: 6px 10px 12px;
+  background: #fff;
+  border-right: 1px solid rgba(0, 0, 0, 0.07);
+  box-shadow: 20px 0 44px rgba(23, 24, 20, 0.13);
+  transform: translateX(-102%);
+  transition: transform 0.22s cubic-bezier(0.22, 0.7, 0.28, 1);
+  z-index: 1;
+}
+.drawer-layer.is-open .drawer { transform: translateX(0); }
+.drawer-head { display: flex; align-items: center; justify-content: space-between; padding: 14px 10px 6px; }
+.drawer-head h2 { font-size: 13px; font-weight: 500; letter-spacing: 2px; color: rgba(27, 29, 26, 0.38); }
+.drawer-list { flex: 1 1 auto; overflow-y: auto; -webkit-overflow-scrolling: touch; padding: 4px 0; }
+.drawer-list::-webkit-scrollbar { width: 0; height: 0; }
+.session-row { display: flex; align-items: center; border-radius: 12px; }
+.session-row + .session-row { margin-top: 2px; }
+.session-row:hover { background: rgba(0, 0, 0, 0.035); }
+.session-row.is-active { background: rgba(185, 138, 75, 0.11); }
+.session-item {
+  flex: 1 1 auto; min-width: 0;
+  display: flex; align-items: center; gap: 8px;
+  padding: 11px 4px 11px 12px;
+  border: 0; background: none; font: inherit; color: #1b1d1a; text-align: left;
+}
+.session-title {
+  flex: 1 1 auto; min-width: 0;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  font-size: 15px;
+}
+.session-time { flex-shrink: 0; font-size: 12px; color: rgba(27, 29, 26, 0.34); }
+.session-del {
+  flex-shrink: 0; width: 28px; height: 28px; margin-right: 6px;
+  border-radius: 50%; font-size: 16px; line-height: 1;
+  color: rgba(27, 29, 26, 0.32); opacity: 0.55;
+}
+.session-row:hover .session-del,
+.session-row.is-active .session-del { opacity: 1; }
+.session-del:hover { background: rgba(0, 0, 0, 0.06); color: #b3261e; }
+.drawer-foot { padding: 8px 4px 2px; border-top: 1px solid rgba(0, 0, 0, 0.06); }
+.drawer-new {
+  display: flex; align-items: center; gap: 8px; width: 100%;
+  padding: 11px 12px; border-radius: 12px; border: 0; background: none;
+  font: inherit; font-size: 15px; color: #8a5f28;
+}
+.drawer-new:hover { background: rgba(185, 138, 75, 0.10); }
+.drawer-new-plus { font-size: 18px; line-height: 1; }
 
 /* ---- production ---- */
 /* Production-only additions on top of the approved prototype styles. */
@@ -858,7 +919,16 @@ svg { display: block; }
 <div class="app" id="app">
 
   <header class="topbar">
-    <div class="wordmark">对话</div>
+    <div class="topbar-left">
+      <button class="icon-btn menu-btn" id="menuBtn" type="button" aria-label="会话列表">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" aria-hidden="true">
+          <path d="M4 7h16"></path>
+          <path d="M4 12h16"></path>
+          <path d="M4 17h11"></path>
+        </svg>
+      </button>
+      <div class="wordmark">对话</div>
+    </div>
     <div class="topbar-actions">
       <button class="ghost-btn" id="newChatBtn" type="button">新对话</button>
       <button class="icon-btn" id="settingsBtn" type="button" aria-label="设置">
@@ -869,6 +939,23 @@ svg { display: block; }
       </button>
     </div>
   </header>
+
+  <!-- 会话抽屉 -->
+  <div class="drawer-layer" id="drawerLayer" aria-hidden="true">
+    <div class="drawer-scrim" id="drawerScrim"></div>
+    <aside class="drawer" id="drawer" role="dialog" aria-modal="true" aria-label="会话列表">
+      <div class="drawer-head">
+        <h2>会话</h2>
+        <button class="sheet-close" id="drawerClose" type="button" aria-label="关闭">×</button>
+      </div>
+      <div class="drawer-list" id="sessionList"></div>
+      <div class="drawer-foot">
+        <button class="drawer-new" id="drawerNew" type="button">
+          <span class="drawer-new-plus">+</span><span>新对话</span>
+        </button>
+      </div>
+    </aside>
+  </div>
 
   <main class="stage">
     <section class="hero" id="hero">
@@ -1109,7 +1196,7 @@ svg { display: block; }
         return;
       }
       if (op === "store.load") {
-        this.receive({ type: "store", data: { messages: [] } });
+        this.receive({ type: "store", data: MOCK_STORE });
         return;
       }
       if (op === "store.save" || op === "store.clear") {
@@ -1162,6 +1249,58 @@ svg { display: block; }
         return;
       }
     }
+  };
+  var NOW = Date.now();
+  var DAY = 864e5;
+  var MOCK_STORE = {
+    v: 2,
+    currentId: "s-demo-1",
+    sessions: [
+      {
+        id: "s-demo-1",
+        title: "\u5E2E\u6211\u7B80\u5316 iPad \u5BA2\u6237\u7AEF\u4EA4\u4E92",
+        createdAt: NOW - 2 * DAY,
+        updatedAt: NOW - 3 * 6e4,
+        messages: [
+          { id: "m1", role: "user", content: "\u5E2E\u6211\u7B80\u5316 iPad \u5BA2\u6237\u7AEF\u7684\u4EA4\u4E92", ts: NOW - 3 * 6e4 },
+          {
+            id: "m2",
+            role: "assistant",
+            content: "\u597D\u7684\uFF0C\u5148\u7ED9\u4F60\u4E00\u4E2A\u6700\u5C0F\u53EF\u884C\u65B9\u6848\uFF1A\n\n- \u754C\u9762\u53EA\u4FDD\u7559\u4E00\u4E2A\u8F93\u5165\u5165\u53E3\u548C\u4E00\u5904\u8BBE\u7F6E\n- \u7F51\u7EDC\u5C42\u53EA\u505A\u4E00\u4E2A\u8F6C\u53D1\u63A5\u53E3\uFF0C\u4E0D\u505A\u8D26\u53F7\u4F53\u7CFB\n- \u914D\u7F6E\u5168\u90E8\u5B58\u5728\u672C\u673A\uFF0C\u6362\u6A21\u578B\u65F6\u4E0D\u6539\u52A8\u754C\u9762",
+            ts: NOW - 3 * 6e4 + 1200
+          }
+        ]
+      },
+      {
+        id: "s-demo-2",
+        title: "\u628A\u601D\u8003\u6863\u4F4D\u52A0\u5230\u8F93\u5165\u6846",
+        createdAt: NOW - DAY,
+        updatedAt: NOW - DAY,
+        messages: [
+          { id: "m3", role: "user", content: "\u628A\u601D\u8003\u6863\u4F4D\u52A0\u5230\u8F93\u5165\u6846", ts: NOW - DAY },
+          {
+            id: "m4",
+            role: "assistant",
+            content: "\u53EF\u4EE5\u505A\u6210\u4E00\u679A chip\uFF1A\u5173\u95ED / \u4F4E / \u4E2D / \u9AD8\uFF0C\u6362\u7B97\u6210 reasoning_effort \u7684 low\u3001medium\u3001high\u3002",
+            ts: NOW - DAY + 2e3
+          }
+        ]
+      },
+      {
+        id: "s-demo-3",
+        title: "OpenAI \u517C\u5BB9\u63A5\u53E3\u7684\u6D41\u5F0F\u89E3\u6790",
+        createdAt: NOW - 4 * DAY,
+        updatedAt: NOW - 3 * DAY,
+        messages: [{ id: "m5", role: "user", content: "OpenAI \u517C\u5BB9\u63A5\u53E3\u7684\u6D41\u5F0F\u89E3\u6790", ts: NOW - 3 * DAY }]
+      },
+      {
+        id: "s-demo-4",
+        title: "\u786E\u8BA4\u6D45\u8272\u4E3B\u9898\u7684\u914D\u8272",
+        createdAt: NOW - 6 * DAY,
+        updatedAt: NOW - 5 * DAY,
+        messages: [{ id: "m6", role: "user", content: "\u786E\u8BA4\u6D45\u8272\u4E3B\u9898\u7684\u914D\u8272", ts: NOW - 5 * DAY }]
+      }
+    ]
   };
   var MOCK_CONFIG = {
     provider: "DeepSeek",
@@ -1320,10 +1459,15 @@ svg { display: block; }
     }
     return (bytes / 1024 / 1024).toFixed(1) + " MB";
   }
+  function pad2(n) {
+    return (n < 10 ? "0" : "") + n;
+  }
   var App = class {
     constructor(bridge) {
       this.config = {};
       this.messages = [];
+      this.sessions = [];
+      this.currentId = "";
       this.requestId = "";
       this.streaming = false;
       this.attach = null;
@@ -1357,11 +1501,9 @@ svg { display: block; }
         this.applyConfig();
         try {
           const store = yield this.bridge.request("store.load", void 0, "store", 8e3);
-          const data = store.data || {};
-          const list = Array.isArray(data.messages) ? data.messages : [];
-          this.messages = list.filter((m) => m && (m.role === "user" || m.role === "assistant") && typeof m.content === "string").map((m) => ({ id: m.id || uid(), role: m.role, content: m.content, image: m.image || null, ts: m.ts || 0 }));
+          this.loadSessions(store.data || {});
         } catch (e) {
-          this.messages = [];
+          this.loadSessions({});
         }
         this.renderAll();
       });
@@ -1387,6 +1529,9 @@ svg { display: block; }
       this.modelCount = $("modelCount");
       this.thinkList = $("thinkList");
       this.toastEl = $("toast");
+      this.drawerLayer = $("drawerLayer");
+      this.drawerScrim = $("drawerScrim");
+      this.sessionList = $("sessionList");
     }
     on(node, ev, fn) {
       if (!node) {
@@ -1443,6 +1588,31 @@ svg { display: block; }
       this.on($("apiKey"), "change", () => this.saveSettings());
       this.on($("refreshModelsBtn"), "click", () => this.fetchModels());
       this.on($("clearChatBtn"), "click", () => this.clearAll());
+      this.on($("menuBtn"), "click", () => this.openDrawer());
+      this.on($("drawerClose"), "click", () => this.closeDrawer());
+      this.on(this.drawerScrim, "click", () => this.closeDrawer());
+      this.on($("drawerNew"), "click", () => this.newChat());
+      this.on(this.sessionList, "click", (e) => {
+        const target = e.target;
+        const row = target.closest ? target.closest(".session-row") : null;
+        if (!row) {
+          return;
+        }
+        const id = row.getAttribute("data-id") || "";
+        if (!id) {
+          return;
+        }
+        if (target.classList && target.classList.contains("session-del")) {
+          this.deleteSession(id);
+          return;
+        }
+        this.switchSession(id);
+      });
+      this.on(window, "keydown", (e) => {
+        if (e.key === "Escape" && this.drawerLayer.classList.contains("is-open")) {
+          this.closeDrawer();
+        }
+      });
       this.on(window, "resize", () => this.scrollToBottom(true));
     }
     bindBridge() {
@@ -1727,6 +1897,7 @@ svg { display: block; }
       this.autogrow();
       this.clearAttach();
       this.enterChat();
+      this.touchCurrent();
       this.renderAll();
       this.scrollToBottom(true);
       this.saveStore();
@@ -1825,6 +1996,7 @@ svg { display: block; }
           last.content = ok ? "\uFF08\u7A7A\u56DE\u590D\uFF09" : "\uFF08\u5DF2\u505C\u6B62\uFF09";
         }
       }
+      this.touchCurrent();
       this.saveStore();
       this.scrollToBottom(true);
     }
@@ -1854,6 +2026,8 @@ svg { display: block; }
       box.appendChild(body);
       box.appendChild(retry);
       this.threadInner.appendChild(box);
+      this.touchCurrent();
+      this.saveStore();
       this.scrollToBottom(true);
     }
     resendLast() {
@@ -1876,8 +2050,10 @@ svg { display: block; }
     /* ------------------------------------------------------------- render -- */
     renderAll() {
       this.threadInner.innerHTML = "";
-      const has = this.messages.length > 0;
-      if (has) {
+      if (!this.messages.length) {
+        this.app.classList.remove("chat");
+        this.heroComposer.appendChild(this.composer);
+      } else {
         this.enterChat();
       }
       for (let i = 0; i < this.messages.length; i++) {
@@ -1942,37 +2118,229 @@ svg { display: block; }
       }
       this.saveTimer = window.setTimeout(() => {
         this.saveTimer = 0;
-        const data = {
-          messages: this.messages.map((m) => ({
+        const sessions = this.sessions.map((s) => ({
+          id: s.id,
+          title: s.title,
+          createdAt: s.createdAt,
+          updatedAt: s.updatedAt,
+          messages: s.messages.slice(-120).map((m) => ({
             id: m.id,
             role: m.role,
             content: m.content,
-            image: m.image || null,
             ts: m.ts || 0
           }))
-        };
-        this.bridge.post("store.save", { data });
+        }));
+        this.bridge.post("store.save", { data: { v: 2, sessions, currentId: this.currentId } });
       }, 700);
+    }
+    /* ----------------------------------------------------------- sessions -- */
+    current() {
+      for (let i = 0; i < this.sessions.length; i++) {
+        if (this.sessions[i].id === this.currentId) {
+          return this.sessions[i];
+        }
+      }
+      return this.sessions.length ? this.sessions[0] : null;
+    }
+    makeSession(messages) {
+      const now = Date.now();
+      return {
+        id: "s" + now.toString(36) + Math.random().toString(36).slice(2, 6),
+        title: this.titleFor(messages),
+        createdAt: now,
+        updatedAt: now,
+        messages
+      };
+    }
+    normalizeMessages(list) {
+      return (Array.isArray(list) ? list : []).filter((m) => m && (m.role === "user" || m.role === "assistant") && typeof m.content === "string").map((m) => ({ id: m.id || uid(), role: m.role, content: m.content, image: m.image || null, ts: m.ts || 0 }));
+    }
+    loadSessions(data) {
+      const raw = Array.isArray(data.sessions) ? data.sessions : null;
+      const loaded = [];
+      if (raw) {
+        for (let i = 0; i < raw.length; i++) {
+          const s = raw[i];
+          if (!s || typeof s !== "object") {
+            continue;
+          }
+          const msgs = this.normalizeMessages(s.messages || []);
+          const now = Date.now();
+          loaded.push({
+            id: typeof s.id === "string" && s.id ? s.id : "s" + now.toString(36) + i,
+            title: typeof s.title === "string" && s.title ? s.title : this.titleFor(msgs),
+            createdAt: Number(s.createdAt) || now,
+            updatedAt: Number(s.updatedAt) || now,
+            messages: msgs
+          });
+        }
+      } else {
+        const legacy = this.normalizeMessages(data.messages || []);
+        if (legacy.length) {
+          loaded.push(this.makeSession(legacy));
+        }
+      }
+      this.sessions = loaded.length ? loaded : [this.makeSession([])];
+      const wanted = typeof data.currentId === "string" ? data.currentId : "";
+      let active = this.sessions[0];
+      for (let i = 0; i < this.sessions.length; i++) {
+        if (this.sessions[i].id === wanted) {
+          active = this.sessions[i];
+        }
+      }
+      this.currentId = active.id;
+      this.messages = active.messages;
+    }
+    titleFor(messages) {
+      for (let i = 0; i < messages.length; i++) {
+        const m = messages[i];
+        if (m.role === "user" && m.content && m.content.trim()) {
+          const text = m.content.replace(/\s+/g, " ").trim();
+          return text.length > 22 ? text.slice(0, 22) + "\u2026" : text;
+        }
+      }
+      return "\u65B0\u5BF9\u8BDD";
+    }
+    touchCurrent() {
+      const s = this.current();
+      if (!s) {
+        return;
+      }
+      s.updatedAt = Date.now();
+      s.title = this.titleFor(s.messages);
+      if (this.drawerLayer && this.drawerLayer.classList.contains("is-open")) {
+        this.renderSessions();
+      }
+    }
+    sessionTime(ts) {
+      const d = new Date(ts || Date.now());
+      const now = /* @__PURE__ */ new Date();
+      const sameDay = (a, b) => a.getFullYear() === b.getFullYear() && a.getMonth() === b.getMonth() && a.getDate() === b.getDate();
+      if (sameDay(d, now)) {
+        return pad2(d.getHours()) + ":" + pad2(d.getMinutes());
+      }
+      const yesterday = new Date(now.getTime() - 864e5);
+      if (sameDay(d, yesterday)) {
+        return "\u6628\u5929";
+      }
+      if (d.getFullYear() === now.getFullYear()) {
+        return d.getMonth() + 1 + "\u6708" + d.getDate() + "\u65E5";
+      }
+      return d.getFullYear() + "/" + (d.getMonth() + 1) + "/" + d.getDate();
+    }
+    renderSessions() {
+      if (!this.sessionList) {
+        return;
+      }
+      this.sessionList.innerHTML = "";
+      const sorted = this.sessions.slice().sort((a, b) => (b.updatedAt || 0) - (a.updatedAt || 0));
+      for (let i = 0; i < sorted.length; i++) {
+        const s = sorted[i];
+        const row = el("div", "session-row" + (s.id === this.currentId ? " is-active" : ""));
+        row.setAttribute("data-id", s.id);
+        const item = el("button", "session-item");
+        item.type = "button";
+        item.appendChild(el("span", "session-title", s.title || "\u65B0\u5BF9\u8BDD"));
+        item.appendChild(el("span", "session-time", this.sessionTime(s.updatedAt)));
+        const del = el("button", "session-del", "\xD7");
+        del.type = "button";
+        del.setAttribute("aria-label", "\u5220\u9664\u4F1A\u8BDD");
+        row.appendChild(item);
+        row.appendChild(del);
+        this.sessionList.appendChild(row);
+      }
+    }
+    openDrawer() {
+      this.renderSessions();
+      this.drawerLayer.classList.add("is-open");
+      this.drawerLayer.setAttribute("aria-hidden", "false");
+    }
+    closeDrawer() {
+      this.drawerLayer.classList.remove("is-open");
+      this.drawerLayer.setAttribute("aria-hidden", "true");
+    }
+    switchSession(id) {
+      if (id === this.currentId) {
+        this.closeDrawer();
+        return;
+      }
+      let next = null;
+      for (let i = 0; i < this.sessions.length; i++) {
+        if (this.sessions[i].id === id) {
+          next = this.sessions[i];
+        }
+      }
+      if (!next) {
+        return;
+      }
+      if (this.streaming) {
+        this.stop();
+      }
+      this.currentId = next.id;
+      this.messages = next.messages;
+      this.renderAll();
+      this.closeDrawer();
+      this.saveStore();
+    }
+    deleteSession(id) {
+      let idx = -1;
+      for (let i = 0; i < this.sessions.length; i++) {
+        if (this.sessions[i].id === id) {
+          idx = i;
+        }
+      }
+      if (idx < 0) {
+        return;
+      }
+      const wasCurrent = id === this.currentId;
+      this.sessions.splice(idx, 1);
+      if (!this.sessions.length) {
+        this.sessions.push(this.makeSession([]));
+      }
+      if (wasCurrent) {
+        if (this.streaming) {
+          this.stop();
+        }
+        const next = this.sessions[this.sessions.length - 1];
+        this.currentId = next.id;
+        this.messages = next.messages;
+        this.renderAll();
+      }
+      this.renderSessions();
+      this.saveStore();
+      this.toast("\u5DF2\u5220\u9664\u4F1A\u8BDD");
     }
     newChat() {
       if (this.streaming) {
         this.stop();
       }
-      this.messages = [];
-      this.threadInner.innerHTML = "";
-      this.app.classList.remove("chat");
-      this.heroComposer.appendChild(this.composer);
-      this.bridge.post("store.clear");
+      const cur = this.current();
+      if (cur && cur.messages.length === 0) {
+        this.closeDrawer();
+        this.renderAll();
+        return;
+      }
+      const s = this.makeSession([]);
+      this.sessions.push(s);
+      this.currentId = s.id;
+      this.messages = s.messages;
+      this.renderAll();
+      this.closeDrawer();
+      this.saveStore();
       this.toast("\u65B0\u5BF9\u8BDD");
     }
     clearAll() {
-      this.messages = [];
-      this.threadInner.innerHTML = "";
-      this.app.classList.remove("chat");
-      this.heroComposer.appendChild(this.composer);
-      this.bridge.post("store.clear");
+      const s = this.current();
+      if (s) {
+        s.messages = [];
+        s.title = "\u65B0\u5BF9\u8BDD";
+        s.updatedAt = Date.now();
+        this.messages = s.messages;
+      }
+      this.renderAll();
+      this.saveStore();
       this.closeOverlay($("settingsOverlay"));
-      this.toast("\u5DF2\u6E05\u7A7A\u5BF9\u8BDD");
+      this.toast("\u5DF2\u6E05\u7A7A\u5F53\u524D\u5BF9\u8BDD");
     }
     /* -------------------------------------------------------------- sheets -- */
     openOverlay(node) {

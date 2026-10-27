@@ -67,7 +67,7 @@ def main():
         for dirpath, _dirnames, filenames in os.walk(app):
             for fn in filenames:
                 full = os.path.join(dirpath, fn)
-                rel = os.path.relpath(full, root).replace(os.sep, "/")
+                rel = "Payload/" + os.path.relpath(full, root).replace(os.sep, "/")
                 zi = zipfile.ZipInfo(rel, (2026, 1, 1, 0, 0, 0))
                 zi.compress_type = zipfile.ZIP_DEFLATED
                 mode = 0o755 if os.path.abspath(full) == os.path.abspath(exe) else 0o644

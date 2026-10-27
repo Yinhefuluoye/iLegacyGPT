@@ -1,0 +1,224 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>capture</title>
+<style>
+  html, body { margin: 0; padding: 0; background: #ffffff; }
+  #done { display: none; position: fixed; left: 4px; top: 4px; width: 6px; height: 6px; background: #00ff00; }
+</style>
+</head>
+<body>
+<div id="done"></div>
+<script>
+(function () {
+  'use strict';
+
+  /* Query: ?shots=a-landscape,a-portrait-chat  (REA viewport must match the
+     viewport of every shot in one batch, because @media inside the serialized
+     SVG foreignObject is evaluated against the outer page viewport.) */
+
+  function qs(name) {
+    var m = (location.search || '').match(new RegExp('[?&]' + name + '=([^&]*)'));
+    return m ? decodeURIComponent(m[1]) : '';
+  }
+
+  function log(msg) {
+    try { fetch('/log', { method: 'POST', body: String(msg) }); } catch (e) { /* ignore */ }
+  }
+
+  function syncFormValues(doc) {
+    var areas = doc.querySelectorAll('textarea');
+    for (var i = 0; i < areas.length; i++) {
+      if (areas[i].value) { areas[i].textContent = areas[i].value; }
+    }
+    var inputs = doc.querySelectorAll('input');
+    for (var j = 0; j < inputs.length; j++) {
+      var el = inputs[j];
+      var type = (el.getAttribute('type') || 'text').toLowerCase();
+      if (type !== 'file' && el.value) { el.setAttribute('value', el.value); }
+    }
+    var selects = doc.querySelectorAll('select');
+    for (var k = 0; k < selects.length; k++) {
+      var sel = selects[k];
+      for (var m = 0; m < sel.options.length; m++) {
+        if (sel.options[m].selected) {
+          sel.options[m].setAttribute('selected', 'selected');
+        } else {
+          sel.options[m].removeAttribute('selected');
+        }
+      }
+    }
+  }
+
+  var batchParam = qs('shots') || qs('shot');
+  var shots = batchParam ? batchParam.split(',') : [];
+  var index = 0;
+
+  function finishAll() {
+    document.getElementById('done').style.display = 'block';
+    document.title = 'done:' + shots.length;
+    log('DONE all ' + shots.length);
+  }
+
+  function runNext() {
+    if (index >= shots.length) { finishAll(); return; }
+    var shot = shots[index];
+    index += 1;
+    captureOne(shot, function () {
+      setTimeout(runNext, 250);
+    });
+  }
+
+  function captureOne(shot, done) {
+    var parts = shot.split('-');
+    var dir = parts[0];
+    var viewport = parts[1] || 'landscape';
+    var mode = parts[2] || '';
+    var w = viewport === 'portrait' ? 768 : 1024;
+    var h = viewport === 'portrait' ? 1024 : 768;
+    var demo = mode === 'chat' || mode === 'models' || mode === 'settings' ? '?demo=' + mode : '';
+
+    log('START ' + shot + ' ' + w + 'x' + h);
+    var iframe = document.createElement('iframe');
+    iframe.setAttribute('width', String(w));
+    iframe.setAttribute('height', String(h));
+    iframe.style.cssText = 'position:fixed;left:0;top:0;border:0;visibility:hidden;width:' + w + 'px;height:' + h + 'px;';
+    iframe.src = '/' + dir + '/index.html' + demo;
+
+    var finished = false;
+    var guard = setTimeout(function () {
+      if (finished) { return; }
+      finished = true;
+      log('TIMEOUT ' + shot);
+      if (iframe.parentNode) { iframe.parentNode.removeChild(iframe); }
+      done();
+    }, 15000);
+
+    var act = qs('act') || '';
+    iframe.onload = function () {
+      setTimeout(function () {
+        if (act) { runAct(iframe, act); }
+        var settle = (act === 'send' || act === 'think') ? 4600 : 500;
+        setTimeout(function () {
+          capture(shot, iframe, w, h, function () { finished = true; clearTimeout(guard); done(); });
+        }, settle);
+      }, 900);
+    };
+    document.body.appendChild(iframe);
+  }
+
+  function runAct(iframe, act) {
+    try {
+      var doc = iframe.contentDocument;
+      var win = iframe.contentWindow;
+      function click(sel) {
+        var el = doc.querySelector(sel);
+        if (!el) { throw new Error('missing ' + sel); }
+        el.click();
+      }
+      if (act === 'send' || act === 'think') {
+        if (act === 'think') { click('#thinkChip'); }
+        var ta = doc.querySelector('#chatInput');
+        ta.value = '帮我把交互再简化一点';
+        ta.dispatchEvent(new win.Event('input', { bubbles: true }));
+        click('#sendBtn');
+      } else if (act === 'models') {
+        click('#modelChip');
+      } else if (act === 'thinkmenu') {
+        click('#thinkChip');
+      } else if (act === 'settings') {
+        click('#settingsBtn');
+      } else if (act === 'font') {
+        click('#settingsBtn');
+        click('#fontInc');
+        click('#fontInc');
+        click('#fontInc');
+        click('#settingsClose');
+      }
+      log('ACT ' + act + ' ok');
+    } catch (e) {
+      log('ACTERR ' + act + ' ' + e);
+    }
+  }
+
+  function capture(shot, iframe, w, h, done) {
+    function finish() {
+      if (iframe.parentNode) { iframe.parentNode.removeChild(iframe); }
+      done();
+    }
+    try {
+      var doc = iframe.contentDocument;
+      if (!doc) { throw new Error('no contentDocument'); }
+      /* Freeze CSS animations/transitions: SVG-image rendering snapshots them
+         at their initial frame, which would hide animated modals. */
+      var frozen = doc.createElement('style');
+      frozen.textContent = '* { -webkit-animation: none !important; animation: none !important; -webkit-transition: none !important; transition: none !important; }';
+      doc.head.appendChild(frozen);
+      /* Live DOM property values (typed textarea content) are not reflected in
+         the serialized markup; copy them into the DOM before serializing. */
+      syncFormValues(doc);
+      var html = new XMLSerializer().serializeToString(doc.documentElement);
+      if (html.indexOf('xmlns=') === -1) {
+        html = html.replace('<html', '<html xmlns="http://www.w3.org/1999/xhtml"');
+      }
+      log('SERIALIZED ' + shot + ' chars=' + html.length);
+      var svg = '<svg xmlns="http://www.w3.org/2000/svg" width="' + w + '" height="' + h + '">' +
+        '<foreignObject x="0" y="0" width="' + w + '" height="' + h + '">' +
+        html +
+        '</foreignObject></svg>';
+      var url = 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(svg);
+      var img = new Image();
+      img.onload = function () {
+        try {
+          var canvas = document.createElement('canvas');
+          canvas.width = w;
+          canvas.height = h;
+          var ctx = canvas.getContext('2d');
+          ctx.drawImage(img, 0, 0, w, h);
+          var dataUrl;
+          try {
+            dataUrl = canvas.toDataURL('image/png');
+          } catch (e) {
+            log('TAINT ' + shot + ' ' + e);
+            finish();
+            return;
+          }
+          log('RASTER ' + shot + ' pngchars=' + dataUrl.length);
+          fetch('/save?name=' + encodeURIComponent(shot), {
+            method: 'POST',
+            body: JSON.stringify({ dataUrl: dataUrl })
+          }).then(function (res) {
+            log('POSTED ' + shot + ' status=' + res.status);
+            finish();
+          }).catch(function (err) {
+            log('POSTERR ' + shot + ' ' + err);
+            finish();
+          });
+        } catch (e) {
+          log('DRAWERR ' + shot + ' ' + e);
+          finish();
+        }
+      };
+      img.onerror = function () {
+        log('IMGERR ' + shot);
+        finish();
+      };
+      img.src = url;
+    } catch (e) {
+      log('EXC ' + shot + ' ' + e);
+      finish();
+    }
+  }
+
+  if (!shots.length) {
+    log('NO SHOTS');
+    finishAll();
+  } else {
+    log('BATCH ' + shots.join(','));
+    runNext();
+  }
+}());
+</script>
+</body>
+</html>

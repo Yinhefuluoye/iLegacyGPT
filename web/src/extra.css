@@ -1,0 +1,121 @@
+/* Production-only additions on top of the approved prototype styles. */
+
+:root {
+  --msg-size: 16px;
+  --kb: 0px;
+}
+
+/* message font size is user-configurable */
+.bubble {
+  font-size: var(--msg-size);
+}
+
+.ai-body {
+  font-size: var(--msg-size);
+}
+
+/* markdown blocks that the prototype did not need */
+.ai-body pre {
+  margin: 0 0 13px;
+  padding: 11px 13px;
+  border-radius: 12px;
+  background: rgba(0, 0, 0, 0.055);
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+}
+
+.ai-body pre:last-child {
+  margin-bottom: 0;
+}
+
+.ai-body pre code {
+  padding: 0;
+  background: none;
+  font-size: 13px;
+  line-height: 1.55;
+  white-space: pre;
+}
+
+.ai-body h2,
+.ai-body h3,
+.ai-body h4 {
+  margin: 2px 0 10px;
+  font-size: 17px;
+  line-height: 1.45;
+  font-weight: 600;
+  color: var(--ai-strong, #111310);
+}
+
+.ai-body h2:first-child,
+.ai-body h3:first-child,
+.ai-body h4:first-child {
+  margin-top: 0;
+}
+
+.ai-body blockquote {
+  margin: 0 0 13px;
+  padding-left: 12px;
+  border-left: 2px solid rgba(0, 0, 0, 0.14);
+  color: rgba(24, 26, 22, 0.62);
+}
+
+.ai-body blockquote:last-child {
+  margin-bottom: 0;
+}
+
+.ai-body a {
+  color: #8a5f28;
+  text-decoration: none;
+  border-bottom: 1px solid rgba(138, 95, 40, 0.28);
+}
+
+.ai-body hr {
+  margin: 15px 0;
+  border: 0;
+  border-top: 1px solid rgba(0, 0, 0, 0.09);
+}
+
+/* error + retry */
+.msg-error {
+  margin: 0 0 10px;
+  font-size: 15px;
+  line-height: 1.6;
+  color: #b3261e;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+.retry-btn {
+  display: inline-block;
+  padding: 6px 14px;
+  border: 1px solid rgba(0, 0, 0, 0.12);
+  border-radius: 999px;
+  background: #fff;
+  color: rgba(24, 26, 22, 0.78);
+  font-size: 13px;
+  font-family: inherit;
+}
+
+/* stop state for the send button while streaming */
+.send-btn.is-stop {
+  background: var(--send-bg, #22241f);
+  color: var(--send-fg, #f7f7f3);
+  opacity: 1;
+}
+
+/* keyboard inset */
+.dock {
+  padding-bottom: calc(16px + var(--kb, 0px));
+}
+
+/* thinking label colour, matches prototype tokens */
+.thinking-label {
+  font-size: 15px;
+  color: rgba(27, 29, 26, 0.5);
+}
+
+@media (max-width: 900px) {
+  .dock {
+    padding-bottom: calc(12px + var(--kb, 0px));
+  }
+}

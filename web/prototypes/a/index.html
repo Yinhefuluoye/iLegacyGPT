@@ -79,9 +79,9 @@
   --toast-bg: #f6f7ff;
   --toast-fg: #14172c;
   --greeting-size: 38px;
-  --greeting-weight: 600;
+  --greeting-weight: 500;
   --greeting-tracking: -0.5px;
-  --greeting-shadow: 0 6px 40px rgba(96, 108, 255, 0.28);
+  --greeting-shadow: 0 2px 20px rgba(110, 122, 255, 0.18);
   --msg-size: 16px;
   --radius-sheet: 22px;
 }
@@ -345,7 +345,17 @@ svg { display: block; }
   transition: background 0.14s ease, border-color 0.14s ease, color 0.14s ease;
 }
 .chip:hover { background: var(--chip-hover); }
-.chip-caret { margin-left: 5px; font-size: 10px; opacity: 0.65; }
+.chip-caret {
+  display: inline-block;
+  width: 0;
+  height: 0;
+  margin-left: 6px;
+  border-left: 3.5px solid transparent;
+  border-right: 3.5px solid transparent;
+  border-top: 4px solid currentColor;
+  opacity: 0.55;
+  font-size: 0;
+}
 .model-chip-name {
   max-width: 132px;
   overflow: hidden;
@@ -623,11 +633,14 @@ svg { display: block; }
 .select-shell select:focus { border-color: var(--accent); }
 .select-caret {
   position: absolute;
-  right: 14px;
+  right: 15px;
   top: 50%;
-  margin-top: -8px;
-  font-size: 11px;
-  color: var(--fg-faint);
+  margin-top: -2.5px;
+  width: 0;
+  height: 0;
+  border-left: 4px solid transparent;
+  border-right: 4px solid transparent;
+  border-top: 5px solid var(--fg-faint);
   pointer-events: none;
 }
 .size-row {
@@ -767,7 +780,7 @@ svg { display: block; }
             <div class="composer-tools">
               <button class="chip model-chip" id="modelChip" type="button" aria-label="切换模型">
                 <span class="model-chip-name" id="modelChipName">gpt-4o</span>
-                <span class="chip-caret">▾</span>
+                <span class="chip-caret"></span>
               </button>
               <button class="chip think-chip" id="thinkChip" type="button" aria-pressed="false" aria-label="思考模式">
                 <span class="think-dot"></span><span>思考</span>
@@ -839,7 +852,7 @@ svg { display: block; }
             <option value="bailian">阿里云百炼</option>
             <option value="custom">自定义</option>
           </select>
-          <span class="select-caret">▾</span>
+          <span class="select-caret"></span>
         </div>
       </div>
 
@@ -958,6 +971,8 @@ svg { display: block; }
   ];
 
   /* ---------- 状态 ---------- */
+  var DIRECTION = document.documentElement.getAttribute('data-direction') || 'a';
+  var PREF_PREFIX = 'ipadchat.' + DIRECTION + '.';
   var provider = 'openai';
   var currentModel = 'gpt-4o';
   var thinking = false;
@@ -1052,22 +1067,22 @@ svg { display: block; }
   /* ---------- 偏好持久化 ---------- */
   function savePrefs() {
     try {
-      window.localStorage.setItem('ipadchat.font-size', String(msgSize));
-      window.localStorage.setItem('ipadchat.provider', provider);
-      window.localStorage.setItem('ipadchat.model', currentModel);
+      window.localStorage.setItem(PREF_PREFIX + 'font-size', String(msgSize));
+      window.localStorage.setItem(PREF_PREFIX + 'provider', provider);
+      window.localStorage.setItem(PREF_PREFIX + 'model', currentModel);
     } catch (e) { /* 隐私模式忽略 */ }
   }
 
   function loadPrefs() {
     try {
-      var size = window.localStorage.getItem('ipadchat.font-size');
+      var size = window.localStorage.getItem(PREF_PREFIX + 'font-size');
       if (size) {
         var n = parseInt(size, 10);
         if (n >= 14 && n <= 22) { msgSize = n; }
       }
-      var savedProvider = window.localStorage.getItem('ipadchat.provider');
+      var savedProvider = window.localStorage.getItem(PREF_PREFIX + 'provider');
       if (savedProvider && PROVIDERS[savedProvider]) { provider = savedProvider; }
-      var savedModel = window.localStorage.getItem('ipadchat.model');
+      var savedModel = window.localStorage.getItem(PREF_PREFIX + 'model');
       if (savedModel) { currentModel = savedModel; }
     } catch (e) { /* 忽略 */ }
   }
@@ -1382,6 +1397,9 @@ svg { display: block; }
       appendAi(REPLIES[0]);
       appendUser('设置里保留哪些项？', null);
       appendAi('保留四项就够了：**字号、提供商、API 地址与 Key、清空对话**。\n\n其余全部走默认值，第一次打开不需要配置。');
+      input.value = '继续细化一下';
+      autoGrow();
+      updateSendState();
       scrollBottom(true);
       return;
     }

@@ -1,0 +1,168 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="theme-color" content="#f6f6f2">
+<title>AI 对话</title>
+<link rel="stylesheet" href="app.css">
+</head>
+<body>
+<div class="app" id="app">
+
+  <header class="topbar">
+    <div class="wordmark">对话</div>
+    <div class="topbar-actions">
+      <button class="ghost-btn" id="newChatBtn" type="button">新对话</button>
+      <button class="icon-btn" id="settingsBtn" type="button" aria-label="设置">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+          <circle cx="12" cy="12" r="3.1"></circle>
+          <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 1 1-4 0v-.09a1.65 1.65 0 0 0-1.08-1.51 1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 1 1 0-4h.09a1.65 1.65 0 0 0 1.51-1.08 1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 1 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 1 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"></path>
+        </svg>
+      </button>
+    </div>
+  </header>
+
+  <main class="stage">
+    <section class="hero" id="hero">
+      <h1 class="greeting">需要我为你做些什么？</h1>
+      <div class="hero-composer" id="heroComposer">
+
+        <!-- 输入胶囊：发送后整块被移动到页面底部 -->
+        <div class="composer" id="composer">
+          <div class="attach-row" id="attachRow">
+            <img class="attach-thumb" id="attachThumb" alt="附件预览">
+            <span class="attach-name" id="attachName"></span>
+            <button class="attach-remove" id="attachRemove" type="button" aria-label="移除图片">×</button>
+          </div>
+          <div class="composer-row">
+            <button class="plus-btn" id="plusBtn" type="button" aria-label="添加图片">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true">
+                <path d="M12 5v14M5 12h14"></path>
+              </svg>
+            </button>
+            <textarea class="composer-input" id="chatInput" rows="1" placeholder="输入你的问题…" aria-label="输入你的问题"></textarea>
+            <div class="composer-tools">
+              <button class="chip model-chip" id="modelChip" type="button" aria-label="切换模型">
+                <span class="model-chip-name" id="modelChipName">gpt-4o</span>
+                <span class="chip-caret"></span>
+              </button>
+              <button class="chip think-chip" id="thinkChip" type="button" aria-pressed="false" aria-label="思考档位">
+                <span class="think-dot"></span><span id="thinkLabel">思考</span>
+              </button>
+              <button class="send-btn" id="sendBtn" type="button" aria-label="发送" disabled>
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                  <path d="M12 19V5"></path>
+                  <path d="M6 11l6-6 6 6"></path>
+                </svg>
+              </button>
+            </div>
+          </div>
+        </div>
+
+      </div>
+    </section>
+
+    <section class="thread" id="thread">
+      <div class="thread-inner" id="threadInner"></div>
+    </section>
+  </main>
+
+  <footer class="dock" id="dock">
+    <div class="dock-inner" id="dockHost"></div>
+  </footer>
+
+</div>
+
+<!-- 模型选择弹层 -->
+<div class="overlay" id="modelOverlay" aria-hidden="true">
+  <div class="sheet is-model" role="dialog" aria-modal="true" aria-label="选择模型">
+    <div class="sheet-head">
+      <h2>选择模型</h2>
+      <button class="sheet-close" id="modelClose" type="button" aria-label="关闭">×</button>
+    </div>
+    <div class="model-list" id="modelList"></div>
+    <div class="sheet-foot">
+      <span class="foot-note" id="modelCount">6 个模型 · OpenAI</span>
+      <span class="foot-note">演示数据</span>
+    </div>
+  </div>
+</div>
+
+<!-- 思考档位弹层 -->
+<div class="overlay" id="thinkOverlay" aria-hidden="true">
+  <div class="sheet is-model" role="dialog" aria-modal="true" aria-label="思考档位">
+    <div class="sheet-head">
+      <h2>思考档位</h2>
+      <button class="sheet-close" id="thinkClose" type="button" aria-label="关闭">×</button>
+    </div>
+    <div class="model-list" id="thinkList"></div>
+    <div class="sheet-foot">
+      <span class="foot-note">档位越高，推理越充分，也越慢</span>
+    </div>
+  </div>
+</div>
+
+<!-- 设置弹层 -->
+<div class="overlay" id="settingsOverlay" aria-hidden="true">
+  <div class="sheet" role="dialog" aria-modal="true" aria-label="设置">
+    <div class="sheet-head">
+      <h2>设置</h2>
+      <button class="sheet-close" id="settingsClose" type="button" aria-label="关闭">×</button>
+    </div>
+    <div class="sheet-body">
+
+      <div class="size-row">
+        <span class="field-label">消息字号</span>
+        <div class="size-control">
+          <button class="size-btn" id="fontDec" type="button" aria-label="减小字号">A-</button>
+          <span class="size-value" id="fontSizeValue">16</span>
+          <button class="size-btn" id="fontInc" type="button" aria-label="增大字号">A+</button>
+        </div>
+      </div>
+
+      <div class="field">
+        <label class="field-label" for="providerSelect">API 提供商</label>
+        <div class="select-shell">
+          <select id="providerSelect">
+            <option value="openai">OpenAI</option>
+            <option value="deepseek">DeepSeek</option>
+            <option value="bailian">阿里云百炼</option>
+            <option value="custom">自定义</option>
+          </select>
+          <span class="select-caret"></span>
+        </div>
+      </div>
+
+      <div class="field-row">
+        <div class="field field-grow">
+          <label class="field-label" for="apiUrl">API 地址</label>
+          <input class="field-input" id="apiUrl" type="text" value="https://api.openai.com/v1" placeholder="https://api.example.com/v1">
+        </div>
+        <div class="field field-port">
+          <label class="field-label" for="apiPort">端口</label>
+          <input class="field-input" id="apiPort" type="text" value="443" placeholder="443">
+        </div>
+      </div>
+
+      <div class="field">
+        <label class="field-label" for="apiKey">API Key</label>
+        <input class="field-input" id="apiKey" type="password" value="sk-proto-000000000000" placeholder="sk-...">
+      </div>
+
+      <button class="wide-btn is-primary" id="refreshModelsBtn" type="button">刷新模型列表</button>
+      <div class="sheet-divider"></div>
+      <button class="wide-btn is-danger" id="clearChatBtn" type="button">清空对话</button>
+      <p class="sheet-note">配置仅保存在本机 · 原型演示数据</p>
+
+    </div>
+  </div>
+</div>
+
+<div class="toast" id="toast" role="status" aria-live="polite"></div>
+<input type="file" id="fileInput" accept="image/*" style="display:none">
+<script src="app.js"></script>
+</body>
+</html>

@@ -23,7 +23,7 @@ interface Message {
   role: 'user' | 'assistant';
   content: string;
   reasoning?: string;
-  image?: { dataBase64: string; mime: string } | null;
+  image?: { dataBase64?: string; mime: string; thumb?: string } | null;
   error?: boolean;
   ts?: number;
 }
@@ -79,7 +79,7 @@ export class App {
   private buildInfo = '';
   private requestId = '';
   private streaming = false;
-  private attach: { dataBase64: string; mime: string; bytes?: number } | null = null;
+  private attach: { dataBase64: string; mime: string; bytes?: number; thumb?: string } | null = null;
   private modelsOpenAfter = false;
   private saveTimer = 0;
   private renderTimer = 0;
@@ -602,7 +602,41 @@ export class App {
     this.composer.classList.add('has-attach');
     this.attachRow.classList.add('is-open');
     this.composer.classList.add('is-stacked');
+    // small copy that is cheap enough to keep in the session archive
+    this.makeThumb('data:' + this.attach.mime + ';base64,' + this.attach.dataBase64, 320, (thumb: string) => {
+      if (this.attach) {
+        this.attach.thumb = thumb;
+      }
+    });
     this.refreshSendState();
+  }
+
+  private makeThumb(src: string, max: number, done: (thumb: string) => void): void {
+    const img = new Image();
+    img.onload = () => {
+      try {
+        const w0 = img.width || max;
+        const h0 = img.height || max;
+        const scale = Math.min(1, max / Math.max(w0, h0));
+        const w = Math.max(1, Math.round(w0 * scale));
+        const h = Math.max(1, Math.round(h0 * scale));
+        const canvas = document.createElement('canvas');
+        canvas.width = w;
+        canvas.height = h;
+        const ctx = canvas.getContext('2d');
+        if (!ctx) {
+          done('');
+          return;
+        }
+        ctx.drawImage(img, 0, 0, w, h);
+        const url = canvas.toDataURL('image/jpeg', 0.7);
+        done(String(url).split(',')[1] || '');
+      } catch (err) {
+        done('');
+      }
+    };
+    img.onerror = () => done('');
+    img.src = src;
   }
 
   private clearAttach(): void {
@@ -652,7 +686,9 @@ export class App {
     if (!text && !this.attach) {
       return;
     }
-    const image = this.attach ? { dataBase64: this.attach.dataBase64, mime: this.attach.mime } : null;
+    const image = this.attach
+      ? { dataBase64: this.attach.dataBase64, mime: this.attach.mime, thumb: this.attach.thumb || '' }
+      : null;
 
     const userMsg: Message = { id: uid(), role: 'user', content: text, image: image, ts: Date.now() };
     this.messages.push(userMsg);
@@ -891,9 +927,11 @@ export class App {
     if (msg.role === 'user') {
       const wrap = el('div', 'msg user');
       wrap.setAttribute('data-id', msg.id);
-      if (msg.image && msg.image.dataBase64) {
+      if (msg.image && (msg.image.thumb || msg.image.dataBase64)) {
         const img = el('img', 'bubble-img') as HTMLImageElement;
-        img.src = 'data:' + (msg.image.mime || 'image/jpeg') + ';base64,' + msg.image.dataBase64;
+        img.src = msg.image.thumb
+          ? 'data:image/jpeg;base64,' + msg.image.thumb
+          : 'data:' + (msg.image.mime || 'image/jpeg') + ';base64,' + msg.image.dataBase64;
         wrap.appendChild(img);
       }
       if (msg.content) {
@@ -953,6 +991,9 @@ export class App {
           id: m.id,
           role: m.role,
           content: m.content,
+          image: m.image && m.image.thumb
+            ? { mime: m.image.mime || 'image/jpeg', thumb: m.image.thumb }
+            : null,
           ts: m.ts || 0
         }))
       }));
@@ -985,7 +1026,15 @@ export class App {
   private normalizeMessages(list: any): Message[] {
     return (Array.isArray(list) ? list : [])
       .filter((m: any) => m && (m.role === 'user' || m.role === 'assistant') && typeof m.content === 'string')
-      .map((m: any) => ({ id: m.id || uid(), role: m.role, content: m.content, image: m.image || null, ts: m.ts || 0 }));
+      .map((m: any) => {
+        const raw = m.image && typeof m.image === 'object' ? m.image : null;
+        const thumb = raw && typeof raw.thumb === 'string' ? raw.thumb : '';
+        const data = raw && typeof raw.dataBase64 === 'string' ? raw.dataBase64 : '';
+        const image = raw && (thumb || data)
+          ? { mime: String(raw.mime || 'image/jpeg'), thumb: thumb, dataBase64: data }
+          : null;
+        return { id: m.id || uid(), role: m.role, content: m.content, image: image, ts: m.ts || 0 };
+      });
   }
 
   private loadSessions(data: any): void {

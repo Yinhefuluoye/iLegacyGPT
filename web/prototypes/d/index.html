@@ -162,13 +162,15 @@ svg { display: block; }
 .app.chat .ghost-btn { display: block; }
 .ghost-btn:hover { background: var(--icon-hover-bg); }
 .icon-btn {
+  position: relative;
   width: 40px; height: 40px;
   border-radius: 50%;
   display: flex; align-items: center; justify-content: center;
   color: var(--fg-dim);
 }
 .icon-btn:hover { background: var(--icon-hover-bg); color: var(--fg); }
-.icon-btn svg { width: 21px; height: 21px; }
+/* iOS 10 WebKit ignores flex centering inside <button>; position the glyph. */
+.icon-btn svg { position: absolute; left: 50%; top: 50%; width: 21px; height: 21px; margin: -10.5px 0 0 -10.5px; }
 
 /* ---------- 主舞台 ---------- */
 .stage {
@@ -281,22 +283,23 @@ svg { display: block; }
   margin-left: auto;
   width: 28px; height: 28px;
   border-radius: 50%;
-  display: flex; align-items: center; justify-content: center;
-  font-size: 17px; line-height: 1;
+  display: block;
+  text-align: center;
+  font-size: 17px; line-height: 26px;
   color: var(--surface-dim);
 }
 .attach-remove:hover { background: var(--surface-hover); }
 
 /* 左侧加号 */
 .plus-btn {
+  position: relative;
   flex: 0 0 auto;
   width: 40px; height: 40px;
   border-radius: 50%;
-  display: flex; align-items: center; justify-content: center;
   color: var(--surface-icon);
 }
 .plus-btn:hover { background: var(--surface-hover); }
-.plus-btn svg { width: 20px; height: 20px; }
+.plus-btn svg { position: absolute; left: 50%; top: 50%; width: 20px; height: 20px; margin: -10px 0 0 -10px; }
 
 /* 输入区 */
 .composer-input {
@@ -330,17 +333,20 @@ svg { display: block; }
   padding-left: 2px;
 }
 .chip {
-  display: flex;
-  align-items: center;
+  /* iOS 10 WebKit: <button> is not a reliable flex container, so lay the chip
+     out as inline content (dot / label / caret share one baseline). */
+  display: inline-block;
   height: 34px;
+  line-height: 32px;
   padding: 0 12px;
-  margin-right: 6px;
+  margin-right: 8px;
   border: 1px solid var(--chip-border);
   border-radius: 999px;
   background: var(--chip-bg);
   color: var(--chip-fg);
   font-size: 13px;
   white-space: nowrap;
+  vertical-align: middle;
   -webkit-transition: background 0.14s ease, border-color 0.14s ease, color 0.14s ease;
   transition: background 0.14s ease, border-color 0.14s ease, color 0.14s ease;
 }
@@ -355,19 +361,25 @@ svg { display: block; }
   border-top: 4px solid currentColor;
   opacity: 0.55;
   font-size: 0;
+  vertical-align: middle;
 }
 .model-chip-name {
+  display: inline-block;
   max-width: 132px;
   overflow: hidden;
   white-space: nowrap;
   text-overflow: ellipsis;
+  vertical-align: middle;
+  line-height: 20px;
 }
 .think-dot {
+  display: inline-block;
   width: 7px; height: 7px;
   margin-right: 6px;
   border-radius: 50%;
   background: currentColor;
   opacity: 0.4;
+  vertical-align: middle;
 }
 .think-chip.is-on {
   background: var(--think-on-bg);
@@ -376,10 +388,10 @@ svg { display: block; }
 }
 .think-chip.is-on .think-dot { opacity: 1; background: var(--accent); }
 .send-btn {
+  position: relative;
   flex: 0 0 auto;
   width: 44px; height: 44px;
   border-radius: 50%;
-  display: flex; align-items: center; justify-content: center;
   border: 1px solid var(--send-border);
   background: var(--send-bg);
   color: var(--send-fg);
@@ -393,7 +405,7 @@ svg { display: block; }
   border-color: transparent;
   cursor: default;
 }
-.send-btn svg { width: 20px; height: 20px; }
+.send-btn svg { position: absolute; left: 50%; top: 50%; width: 20px; height: 20px; margin: -10px 0 0 -10px; }
 
 /* ---------- 消息 ---------- */
 .msg { margin: 0 0 28px; }
@@ -543,9 +555,10 @@ svg { display: block; }
 .sheet-close {
   width: 32px; height: 32px;
   border-radius: 50%;
-  display: flex; align-items: center; justify-content: center;
+  display: block;
+  text-align: center;
   font-size: 20px;
-  line-height: 1;
+  line-height: 30px;
   color: var(--fg-dim);
 }
 .sheet-close:hover { background: var(--icon-hover-bg); color: var(--fg); }
@@ -658,7 +671,9 @@ svg { display: block; }
   background: var(--field-bg);
   color: var(--field-fg);
   font-size: 14px;
-  display: flex; align-items: center; justify-content: center;
+  display: block;
+  text-align: center;
+  line-height: 32px;
 }
 .size-btn:hover { background: var(--icon-hover-bg); }
 .size-value {
@@ -798,25 +813,38 @@ svg { display: block; }
 .session-act:active { -webkit-filter: brightness(0.95); filter: brightness(0.95); }
 .session-content {
   position: relative; z-index: 1;
-  display: flex; align-items: center;
+  display: block;
   width: 100%; margin: 0;
   padding: 11px 12px;
   border: 0; border-radius: 12px;
   background: #fff;
   font: inherit; font-size: 15px; color: #1b1d1a; text-align: left;
+  white-space: nowrap;
+  overflow: hidden;
   -webkit-user-select: none; user-select: none;
   touch-action: pan-y;
   transition: transform 0.18s cubic-bezier(0.22, 0.7, 0.28, 1), padding 0.18s cubic-bezier(0.22, 0.7, 0.28, 1);
 }
 .session-row:hover .session-content { background: rgba(0, 0, 0, 0.035); }
 .session-row.is-active .session-content { background: rgba(185, 138, 75, 0.11); }
-.session-row.is-open .session-content { padding-right: 148px; }
+.session-row.is-open .session-content { padding-right: 152px; }
 .session-title {
-  flex: 1 1 auto; min-width: 0; margin-right: 8px;
+  display: inline-block;
+  vertical-align: middle;
+  max-width: calc(100% - 86px);
+  margin-right: 8px;
   overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
   font-size: 15px;
+  line-height: 20px;
 }
-.session-time { flex-shrink: 0; font-size: 12px; color: rgba(27, 29, 26, 0.34); }
+.session-time {
+  display: inline-block;
+  vertical-align: middle;
+  float: right;
+  font-size: 12px;
+  line-height: 20px;
+  color: rgba(27, 29, 26, 0.34);
+}
 .session-rename {
   width: 100%; margin: 0;
   padding: 10px 12px;
@@ -828,12 +856,14 @@ svg { display: block; }
 .drawer-foot { padding: 8px 4px 2px; border-top: 1px solid rgba(0, 0, 0, 0.06); }
 .drawer-hint { padding: 2px 12px 6px; font-size: 11px; color: rgba(27, 29, 26, 0.30); }
 .drawer-new {
-  display: flex; align-items: center; width: 100%;
+  display: block;
+  width: 100%;
   padding: 11px 12px; border-radius: 12px; border: 0; background: none;
-  font: inherit; font-size: 15px; color: #8a5f28;
+  font: inherit; font-size: 15px; line-height: 24px; color: #8a5f28;
+  text-align: left;
 }
 .drawer-new:hover { background: rgba(185, 138, 75, 0.10); }
-.drawer-new-plus { font-size: 18px; line-height: 1; margin-right: 7px; }
+.drawer-new-plus { display: inline-block; font-size: 18px; line-height: 1; margin-right: 7px; vertical-align: middle; }
 </style>
 </head>
 <body>

@@ -64,7 +64,7 @@
 
 ## 从源码构建
 
-工具链：WSL（Ubuntu 22.04）、Theos、iPhoneOS 10.3 SDK。参见 [docs/build-wsl.md](docs/build-wsl.md)。
+工具链：WSL（Ubuntu 22.04）、Theos、iPhoneOS 10.3 SDK。参见 [docs/build-wsl.zh-CN.md](docs/build-wsl.zh-CN.md)。
 
 ```bash
 cd web && node build.mjs   # TypeScript -> ES5 bundle -> ios/Resources/web/index.html

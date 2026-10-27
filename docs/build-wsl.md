@@ -1,67 +1,74 @@
-# 在 Windows 上用 WSL2 本地构建 IPA
+# Building on Windows with WSL2
 
-> 目标：改完代码 10–20 秒出 `dist/ChatAI-*.ipa`，不依赖 GitHub Actions。
-> 适用：Windows 10 2004+ / Windows 11（本机为 Windows 10 19045，支持）。
+Produces a signed-free IPA locally in 10–20 seconds after a source change. Requires Windows 10 2004 or later, or Windows 11.
 
-## 1. 一次性安装（管理员 PowerShell）
+English | [简体中文](build-wsl.zh-CN.md)
+
+## 1. Prerequisites
+
+Windows Subsystem for Linux 2 with an Ubuntu distribution. Administrator PowerShell:
 
 ```powershell
 wsl --install
 ```
 
-- 会自动启用「适用于 Linux 的 Windows 子系统」和「虚拟机平台」，并安装 Ubuntu。
-- 装完**重启电脑**；重启后 Ubuntu 窗口会自动打开，要求创建 Linux 用户名和密码
-  （用户名用小写，密码输入时看不到字符，记住它）。
-- 如果提示不认识 `--install`，用下面两条命令代替，然后重启：
+If `--install` is unavailable:
 
 ```powershell
 dism.exe /online /enable-feature /featurename:Microsoft-Windows-Subsystem-Linux /all /norestart
 dism.exe /online /enable-feature /featurename:VirtualMachinePlatform /all /norestart
 ```
 
-## 2. 验证
+Restart the machine after installation. Ubuntu requests a Linux user name and password on first launch; use lower case for the user name.
+
+## 2. Verify the installation
 
 ```powershell
 wsl -l -v
 ```
 
-应显示 `Ubuntu` 且 `VERSION` 为 `2`。如果 VERSION 是 1：
+`Ubuntu` must report `VERSION 2`. If it reports 1:
 
 ```powershell
 wsl --set-version Ubuntu 2
 wsl --set-default-version 2
 ```
 
-## 3. 安装依赖 + Theos（Ubuntu 里执行一次）
+## 3. Install the toolchain
+
+Run once inside Ubuntu:
 
 ```bash
 sudo apt update && sudo apt install -y bash curl sudo git unzip python3 make perl
 bash -c "$(curl -fsSL https://raw.githubusercontent.com/theos/theos/master/bin/install-theos)"
 ```
 
-Theos 会装到 `~/theos`，并下载 Linux 版 iOS 工具链和 SDK（约几百 MB）。
+Theos is installed in `~/theos`, together with the Linux iOS toolchain and SDK.
 
-## 4. 构建
+## 4. Build
 
 ```bash
 cd /mnt/d/Developer/Dsh-Work/projects/ipad-chat-client
-bash tools/build_local.sh
-# 产物：dist/ChatAI-0.1.local.ipa
+NAME=iLegacyGPT VERSION=x.y.z bash tools/build_local.sh
 ```
 
-## 常见问题
+Output: `dist/iLegacyGPT-<version>.ipa`, containing armv7 and arm64 slices.
 
-| 现象 | 处理 |
+The UI bundle is generated from `web/src` by `web/build.mjs`; run that first if TypeScript or CSS changed.
+
+## 5. Troubleshooting
+
+| Message | Action |
 | --- | --- |
-| `0x80370102` / 提示虚拟化未启用 | 进 BIOS 打开 Intel VT-x / AMD-V，或「启用或关闭 Windows 功能」里勾选「虚拟机平台」 |
-| `WSL 2 requires an update to its kernel component` | 安装 [wsl_update_x64.msi](https://wslstorekit.blob.core.windows.net/wslupdates/wsl_update_x64.msi)，再 `wsl --set-default-version 2` |
-| `wsl --install` 下载 Ubuntu 失败 | Microsoft Store 手动装 Ubuntu 22.04，或 `wsl --install -d Ubuntu` |
-| 构建报 `iPhoneOS10.3.sdk not found` | `$HOME/theos/bin/install-sdk 10.3` |
-| 构建报 `Theos not found` | `export THEOS=$HOME/theos` 或重跑第 3 步安装脚本 |
-| `/mnt/d` 下构建慢 | 可选：`cp -r /mnt/d/.../ipad-chat-client ~/build && cd ~/build`（产物再拷回 dist/） |
+| `0x80370102`, virtualisation unavailable | enable Intel VT-x or AMD-V in firmware, and enable the Virtual Machine Platform Windows feature |
+| `WSL 2 requires an update to its kernel component` | install `wsl_update_x64.msi`, then run `wsl --set-default-version 2` |
+| Ubuntu download fails during `wsl --install` | install Ubuntu 22.04 from the Microsoft Store, or run `wsl --install -d Ubuntu` |
+| `iPhoneOS10.3.sdk not found` | `$HOME/theos/bin/install-sdk 10.3` |
+| `Theos not found` | `export THEOS=$HOME/theos`, or repeat step 3 |
+| build is slow under `/mnt/d` | copy the repository into the Linux filesystem before building |
 
-## 备注
+## 6. Notes
 
-- 构建不需要 root；Theos 装在自己的家目录。
-- 首次构建后 `.theos/` 缓存生效，后续编译通常在 10 秒内。
-- IPA 不签名，装到 iPad 仍然走爱思助手（AppSync 已装）。
+- The build requires no root privileges; Theos is installed in the user home directory.
+- After the first build, the `.theos` cache makes subsequent builds take a few seconds.
+- The IPA is unsigned and is installed with a signing tool or AppSync Unified.

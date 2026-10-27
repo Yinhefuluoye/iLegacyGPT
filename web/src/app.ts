@@ -198,7 +198,9 @@ export class App {
       this.refreshSendState();
     });
     this.on(this.input, 'keydown', (e: any) => {
-      if (e.key === 'Enter' && !e.shiftKey && !e.isComposing) {
+      // Enter inserts a newline (the iOS "换行" key must not send);
+      // Cmd/Ctrl+Enter sends, for hardware keyboards.
+      if (e.key === 'Enter' && (e.metaKey || e.ctrlKey) && !e.isComposing) {
         e.preventDefault();
         if (!this.streaming) {
           this.send();
@@ -318,8 +320,8 @@ export class App {
       }
     });
     this.bridge.on('keyboard', (m: Msg) => {
-      const h = Math.max(0, Number(m.height) || 0);
-      document.documentElement.style.setProperty('--kb', h + 'px');
+      // Native already shrinks the web view to sit above the keyboard.
+      document.documentElement.style.setProperty('--kb', '0px');
       this.scrollToBottom(true);
     });
     this.bridge.on('image', (m: Msg) => this.receiveImage(m));

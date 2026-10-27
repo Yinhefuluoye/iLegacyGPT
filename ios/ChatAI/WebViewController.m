@@ -27,6 +27,7 @@ static UIImage *ScaleImageToMaxSide(UIImage *image, CGFloat maxSide) {
 @property (nonatomic, strong) NSMutableArray *logs;
 @property (nonatomic, copy) NSString *pendingImageRequestId;
 @property (nonatomic, assign) BOOL didSendReady;
+@property (nonatomic, assign) CGFloat keyboardOverlap;
 
 @end
 
@@ -86,16 +87,23 @@ static UIImage *ScaleImageToMaxSide(UIImage *image, CGFloat maxSide) {
 
 - (void)viewDidLayoutSubviews {
     [super viewDidLayoutSubviews];
-    // Keep the page below the status bar so the HTML top bar never collides
-    // with the system clock / battery row.
-    CGRect bounds = self.view.bounds;
-    CGFloat top = 0;
+    [self layoutWebView];
+}
+
+- (CGFloat)statusBarInset {
     UIApplication *app = [UIApplication sharedApplication];
-    if (!app.statusBarHidden) {
-        top = app.statusBarFrame.size.height;
-    }
-    self.webView.frame = CGRectMake(bounds.origin.x, bounds.origin.y + top,
-                                    bounds.size.width, bounds.size.height - top);
+    return app.statusBarHidden ? 0.0 : app.statusBarFrame.size.height;
+}
+
+// Shrink the page itself when the keyboard is up: the composer then sits right
+// above the keyboard instead of relying on a CSS padding guess (which drifted
+// after a few turns on iOS 10).
+- (void)layoutWebView {
+    CGRect bounds = self.view.bounds;
+    CGFloat top = [self statusBarInset];
+    CGFloat bottom = self.keyboardOverlap;
+    CGFloat height = MAX(0.0, bounds.size.height - top - bottom);
+    self.webView.frame = CGRectMake(bounds.origin.x, bounds.origin.y + top, bounds.size.width, height);
 }
 
 #pragma mark - Bridge out
@@ -303,6 +311,8 @@ static UIImage *ScaleImageToMaxSide(UIImage *image, CGFloat maxSide) {
     CGRect endFrame = [info[UIKeyboardFrameEndUserInfoKey] CGRectValue];
     CGRect inView = [self.view convertRect:endFrame fromView:nil];
     CGFloat overlap = MAX(0.0, CGRectGetMaxY(self.view.bounds) - CGRectGetMinY(inView));
+    self.keyboardOverlap = overlap;
+    [self layoutWebView];
     [self sendToWeb:@{ @"type": @"keyboard", @"height": @(lroundf(overlap)) }];
 }
 

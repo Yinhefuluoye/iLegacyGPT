@@ -103,9 +103,9 @@
   opacity: 1;
 }
 
-/* keyboard inset */
+/* keyboard: native shrinks the web view, so the dock only needs its own padding */
 .dock {
-  padding-bottom: calc(16px + var(--kb, 0px));
+  padding-bottom: 16px;
 }
 
 /* settings: helper line under a field */
@@ -154,6 +154,6 @@
 
 @media (max-width: 900px) {
   .dock {
-    padding-bottom: calc(12px + var(--kb, 0px));
+    padding-bottom: 12px;
   }
 }

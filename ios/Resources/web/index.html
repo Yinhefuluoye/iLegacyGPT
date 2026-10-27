@@ -962,9 +962,9 @@ svg { display: block; }
   opacity: 1;
 }
 
-/* keyboard inset */
+/* keyboard: native shrinks the web view, so the dock only needs its own padding */
 .dock {
-  padding-bottom: calc(16px + var(--kb, 0px));
+  padding-bottom: 16px;
 }
 
 /* settings: helper line under a field */
@@ -1013,7 +1013,7 @@ svg { display: block; }
 
 @media (max-width: 900px) {
   .dock {
-    padding-bottom: calc(12px + var(--kb, 0px));
+    padding-bottom: 12px;
   }
 }
 </style>
@@ -1687,7 +1687,7 @@ svg { display: block; }
         this.refreshSendState();
       });
       this.on(this.input, "keydown", (e) => {
-        if (e.key === "Enter" && !e.shiftKey && !e.isComposing) {
+        if (e.key === "Enter" && (e.metaKey || e.ctrlKey) && !e.isComposing) {
           e.preventDefault();
           if (!this.streaming) {
             this.send();
@@ -1799,8 +1799,7 @@ svg { display: block; }
         }
       });
       this.bridge.on("keyboard", (m) => {
-        const h = Math.max(0, Number(m.height) || 0);
-        document.documentElement.style.setProperty("--kb", h + "px");
+        document.documentElement.style.setProperty("--kb", "0px");
         this.scrollToBottom(true);
       });
       this.bridge.on("image", (m) => this.receiveImage(m));

@@ -297,8 +297,7 @@ const MOCK_REASONING =
   '界面越少越好，所以核心是输入框 + 一处设置。' +
   '网络层只做转发，不引入账号体系，配置留在本机即可。';
 
-/* Preview-only demo modes, selected with ?demo=search / ?demo=table. Used by
-   web/_preview/capture.html to screenshot the newer features without a gateway. */
+/* Preview fixtures for web/_preview: ?demo=search and ?demo=table. */
 const DEMO_MODE = (function () {
   const m = typeof location !== 'undefined' ? /[?&]demo=([a-z]+)/.exec(location.search) : null;
   return m ? m[1] : '';

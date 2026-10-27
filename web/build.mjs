@@ -13,11 +13,8 @@ const es5Dir = join(root, '.build', 'es5');
 mkdirSync(dist, { recursive: true });
 mkdirSync(shellWeb, { recursive: true });
 
-// 1. TypeScript -> ES5 first, then bundle.
-//    The iPad 4 runs iOS 10 (ES2015 is fine there), but the same shell also has
-//    to run on iOS 9.3.5 devices, whose WebKit has no `let`/arrow functions.
-//    esbuild cannot lower to ES5, so the project's own tsc does that pass and
-//    esbuild only bundles the resulting CommonJS.
+// 1. TypeScript to ES5, then bundle. esbuild cannot lower to ES5, so tsc emits first
+// and esbuild only bundles the result. iOS 9.3 WebKit has no let, arrow or class.
 rmSync(join(root, '.build'), { recursive: true, force: true });
 execFileSync(process.execPath, [
   join(root, 'node_modules', 'typescript', 'bin', 'tsc'),

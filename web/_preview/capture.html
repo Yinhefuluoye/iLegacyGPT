@@ -183,9 +183,7 @@
       /* Live DOM property values (typed textarea content) are not reflected in
          the serialized markup; copy them into the DOM before serializing. */
       syncFormValues(doc);
-      /* The inlined app bundle lives in a <script> inside the document; it is
-         dead weight for a static image and, since the ES5 build, large enough
-         to blow up the SVG data URL. Screenshot a script-free clone. */
+      /* Serialise a script-free clone; scripts are not needed for the image. */
       var clone = doc.documentElement.cloneNode(true);
       var scripts = clone.querySelectorAll('script');
       for (var si = 0; si < scripts.length; si++) {

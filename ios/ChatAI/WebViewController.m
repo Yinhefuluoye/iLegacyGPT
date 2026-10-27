@@ -23,7 +23,6 @@ static UIImage *ScaleImageToMaxSide(UIImage *image, CGFloat maxSide) {
 
 @interface WebViewController () <WKNavigationDelegate, UIImagePickerControllerDelegate, UINavigationControllerDelegate>
 
-@property (nonatomic, strong) WKWebView *webView;
 @property (nonatomic, strong) AIService *ai;
 @property (nonatomic, strong) NSMutableArray *logs;
 @property (nonatomic, copy) NSString *pendingImageRequestId;

@@ -20,11 +20,23 @@ dist/                    构建产物（不入库）
 .toolchain/              本地工具链（LLVM / iPhoneOS10.3.sdk，不入库）
 ```
 
-## 本地构建
+## 构建
+
+**方式 A：GitHub Actions（默认）** —— push 到 `main` 自动出包，产物在 Actions 的 artifact 里。
+
+**方式 B：本地 WSL2（Windows，适合快速迭代）**
+
+```bash
+cd /mnt/d/Developer/Dsh-Work/projects/ipad-chat-client
+bash tools/build_local.sh        # 产物 dist/ChatAI-*.ipa
+```
+
+首次安装步骤见 [docs/build-wsl.md](docs/build-wsl.md)。
+
+**方式 C：Windows 原生只做编译检查**（不能链接 armv7，链接必须靠 Theos）
 
 ```powershell
-# 依赖：LLVM（clang + ld64.lld）与 theos/sdks 的 iPhoneOS10.3.sdk
-python tools/build.py --sdk .toolchain\theos-sdks\iPhoneOS10.3.sdk --out dist
+python tools/build.py --sdk .toolchain\theos-sdks\iPhoneOS10.3.sdk --clang .toolchain\llvm\bin\clang.exe --compile-only
 ```
 
 ## 在 iPad 上安装

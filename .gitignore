@@ -4,6 +4,9 @@ dist/*.ipa
 dist/*.app/
 # local toolchain (LLVM / iOS SDK), never committed
 .toolchain/
+# local WSL distro + helper caches
+.wsl/
+.ghcache/
 # web build outputs generated from TS
 web/dist/
 web/node_modules/

@@ -190,83 +190,86 @@ static NSString *ErrorTextFromBody(NSData *body, NSInteger statusCode) {
     NSString *base = [ChatConfig normalizedBaseURL:config];
     NSArray *candidates = CandidateURLs(base, @"/models");
     NSString *key = [ChatConfig apiKeyFromConfig:config];
+    [self fetchModelsWithCandidates:candidates index:0 key:key lastStatus:0 completion:completion];
+}
 
-    __block NSUInteger index = 0;
+- (void)fetchModelsWithCandidates:(NSArray *)candidates
+                            index:(NSUInteger)index
+                              key:(NSString *)key
+                       lastStatus:(NSInteger)lastStatus
+                       completion:(void (^)(NSArray *models, id raw, NSString *errorMessage))completion {
+    if (index >= candidates.count) {
+        NSString *msg = lastStatus > 0
+            ? [NSString stringWithFormat:@"获取模型失败（HTTP %ld）", (long)lastStatus]
+            : @"获取模型失败，请检查 API 地址";
+        dispatch_async(dispatch_get_main_queue(), ^{
+            completion(nil, nil, msg);
+        });
+        return;
+    }
+    NSString *urlString = candidates[index];
+    NSMutableURLRequest *request = [NSMutableURLRequest requestWithURL:[NSURL URLWithString:urlString]];
+    request.HTTPMethod = @"GET";
+    request.timeoutInterval = 30;
+    [request setValue:[@"Bearer " stringByAppendingString:key] forHTTPHeaderField:@"Authorization"];
+    [request setValue:@"application/json" forHTTPHeaderField:@"Accept"];
     __weak typeof(self) weakSelf = self;
-
-    void (^tryNext)(NSInteger lastStatus) = ^(NSInteger lastStatus) {
-        __strong typeof(weakSelf) self_ = weakSelf;
-        if (!self_ || index >= candidates.count) {
-            NSString *msg = lastStatus > 0
-                ? [NSString stringWithFormat:@"获取模型失败（HTTP %ld）", (long)lastStatus]
-                : @"获取模型失败，请检查 API 地址";
+    NSURLSessionDataTask *task = [self.session dataTaskWithRequest:request
+                                                completionHandler:^(NSData *data, NSURLResponse *response, NSError *error) {
+        __strong typeof(weakSelf) strongSelf = weakSelf;
+        if (!strongSelf) {
+            return;
+        }
+        if (error) {
+            [strongSelf fetchModelsWithCandidates:candidates index:index + 1 key:key lastStatus:0 completion:completion];
+            return;
+        }
+        NSInteger status = 0;
+        if ([response isKindOfClass:[NSHTTPURLResponse class]]) {
+            status = [(NSHTTPURLResponse *)response statusCode];
+        }
+        if (status == 404 || status == 405) {
+            [strongSelf fetchModelsWithCandidates:candidates index:index + 1 key:key lastStatus:status completion:completion];
+            return;
+        }
+        if (status < 200 || status >= 300) {
+            NSString *msg = ErrorTextFromBody(data, status);
             dispatch_async(dispatch_get_main_queue(), ^{
                 completion(nil, nil, msg);
             });
             return;
         }
-        NSString *urlString = candidates[index];
-        index += 1;
-        NSMutableURLRequest *request = [NSMutableURLRequest requestWithURL:[NSURL URLWithString:urlString]];
-        request.HTTPMethod = @"GET";
-        request.timeoutInterval = 30;
-        [request setValue:[@"Bearer " stringByAppendingString:key] forHTTPHeaderField:@"Authorization"];
-        [request setValue:@"application/json" forHTTPHeaderField:@"Accept"];
-        NSURLSessionDataTask *task = [self.session dataTaskWithRequest:request
-                                                    completionHandler:^(NSData *data, NSURLResponse *response, NSError *error) {
-            if (error) {
-                tryNext(0);
-                return;
+        id obj = [NSJSONSerialization JSONObjectWithData:data options:0 error:NULL];
+        NSMutableArray *ids = [NSMutableArray array];
+        id list = nil;
+        if ([obj isKindOfClass:[NSDictionary class]]) {
+            list = obj[@"data"];
+            if (![list isKindOfClass:[NSArray class]]) {
+                list = obj[@"models"];
             }
-            NSInteger status = 0;
-            if ([response isKindOfClass:[NSHTTPURLResponse class]]) {
-                status = [(NSHTTPURLResponse *)response statusCode];
-            }
-            if (status == 404 || status == 405) {
-                tryNext(status);
-                return;
-            }
-            if (status < 200 || status >= 300) {
-                NSString *msg = ErrorTextFromBody(data, status);
-                dispatch_async(dispatch_get_main_queue(), ^{
-                    completion(nil, nil, msg);
-                });
-                return;
-            }
-            id obj = [NSJSONSerialization JSONObjectWithData:data options:0 error:NULL];
-            NSMutableArray *ids = [NSMutableArray array];
-            id list = nil;
-            if ([obj isKindOfClass:[NSDictionary class]]) {
-                list = obj[@"data"];
-                if (![list isKindOfClass:[NSArray class]]) {
-                    list = obj[@"models"];
-                }
-            } else if ([obj isKindOfClass:[NSArray class]]) {
-                list = obj;
-            }
-            if ([list isKindOfClass:[NSArray class]]) {
-                for (id item in list) {
-                    if ([item isKindOfClass:[NSString class]]) {
-                        [ids addObject:item];
-                    } else if ([item isKindOfClass:[NSDictionary class]]) {
-                        NSString *mid = item[@"id"];
-                        if (![mid isKindOfClass:[NSString class]]) {
-                            mid = item[@"name"];
-                        }
-                        if ([mid isKindOfClass:[NSString class]] && mid.length) {
-                            [ids addObject:mid];
-                        }
+        } else if ([obj isKindOfClass:[NSArray class]]) {
+            list = obj;
+        }
+        if ([list isKindOfClass:[NSArray class]]) {
+            for (id item in list) {
+                if ([item isKindOfClass:[NSString class]]) {
+                    [ids addObject:item];
+                } else if ([item isKindOfClass:[NSDictionary class]]) {
+                    NSString *mid = item[@"id"];
+                    if (![mid isKindOfClass:[NSString class]]) {
+                        mid = item[@"name"];
+                    }
+                    if ([mid isKindOfClass:[NSString class]] && mid.length) {
+                        [ids addObject:mid];
                     }
                 }
             }
-            dispatch_async(dispatch_get_main_queue(), ^{
-                completion(ids, obj, nil);
-            });
-        }];
-        [task resume];
-    };
-
-    tryNext(0);
+        }
+        dispatch_async(dispatch_get_main_queue(), ^{
+            completion(ids, obj, nil);
+        });
+    }];
+    [task resume];
 }
 
 #pragma mark - Chat
@@ -443,9 +446,15 @@ static NSString *ErrorTextFromBody(NSData *body, NSInteger statusCode) {
     }
     state.flushScheduled = YES;
     __weak typeof(self) weakSelf = self;
-    dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(0.03 * NSEC_PER_SEC)), self.delegateQueue, ^{
-        state.flushScheduled = NO;
-        [weakSelf flushState:state];
+    dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(0.03 * NSEC_PER_SEC)), dispatch_get_main_queue(), ^{
+        __strong typeof(weakSelf) strongSelf = weakSelf;
+        if (!strongSelf) {
+            return;
+        }
+        [strongSelf.delegateQueue addOperationWithBlock:^{
+            state.flushScheduled = NO;
+            [strongSelf flushState:state];
+        }];
     });
 }
 

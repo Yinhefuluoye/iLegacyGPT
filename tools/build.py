@@ -146,6 +146,7 @@ def main():
         "-fblocks",
         "-O2",
         "-Wall",
+        "-Werror",
         "-Wno-unused-parameter",
         "-Wno-deprecated-declarations",
         "-I", SRC_DIR,

@@ -26,6 +26,7 @@ static UIImage *ScaleImageToMaxSide(UIImage *image, CGFloat maxSide) {
 @property (nonatomic, strong) AIService *ai;
 @property (nonatomic, strong) NSMutableArray *logs;
 @property (nonatomic, copy) NSString *pendingImageRequestId;
+@property (nonatomic, copy) NSString *cancelledRequestId;
 @property (nonatomic, assign) BOOL didSendReady;
 @property (nonatomic, assign) CGFloat keyboardOverlap;
 
@@ -205,6 +206,7 @@ static UIImage *ScaleImageToMaxSide(UIImage *image, CGFloat maxSide) {
         NSDictionary *image = [body[@"image"] isKindOfClass:[NSDictionary class]] ? body[@"image"] : nil;
         NSDictionary *thinking = [body[@"thinking"] isKindOfClass:[NSDictionary class]] ? body[@"thinking"] : nil;
         __weak typeof(self) weakSelf = self;
+        self.cancelledRequestId = nil;
         NSString *rid = [self startChatWithSearch:cfg
                                           requestId:requestId
                                            messages:messages
@@ -233,6 +235,7 @@ static UIImage *ScaleImageToMaxSide(UIImage *image, CGFloat maxSide) {
         return;
     }
     if ([op isEqualToString:@"chat.stop"]) {
+        self.cancelledRequestId = requestId ?: @"";
         [self.ai stopRequest:requestId];
         [self sendToWeb:@{ @"type": @"aborted", @"requestId": requestId }];
         return;
@@ -326,6 +329,12 @@ static NSString *SearchJSONEscape(NSString *text) {
     [out replaceOccurrencesOfString:@"\r" withString:@"" options:0 range:NSMakeRange(0, out.length)];
     [out replaceOccurrencesOfString:@"\t" withString:@" " options:0 range:NSMakeRange(0, out.length)];
     return out;
+}
+
+// Injected when the model asked for a search but nothing usable came back.
+static NSString *SearchFailureNote(void) {
+    return @"【系统说明】客户端已经替你检索过网络，但这次没有取到可用的网页结果。"
+            "请如实说明未能获取实时资料，并基于已有知识作答；不要编造链接或来源。";
 }
 
 static id SearchValueAtPath(id object, NSString *path) {
@@ -584,8 +593,13 @@ static id SearchValueAtPath(id object, NSString *path) {
     return [content isKindOfClass:[NSString class]] ? content : nil;
 }
 
-// Same contract as AIService -startChatWithConfig:..., but runs the optional
-// web search first so AIService stays a pure chat-completions client.
+// Chat entry point.
+//   off   -> plain request, no tools
+//   force -> always search first, then answer once with the results injected
+//   auto  -> advertise a real `web_search` tool and let the model decide; the
+//            follow-up round runs with tools off so a turn can never loop.
+// The 0.6.x search-planner path is kept as a fallback for endpoints that reject
+// `tools` (HTTP 400/422), so auto still searches on non-tool models.
 - (NSString *)startChatWithSearch:(NSDictionary *)config
                         requestId:(NSString *)requestId
                          messages:(NSArray *)messages
@@ -597,51 +611,116 @@ static id SearchValueAtPath(id object, NSString *path) {
                           onError:(AIErrorBlock)onError {
     NSDictionary *searchCfg = [config[@"search"] isKindOfClass:[NSDictionary class]] ? config[@"search"] : @{};
     NSString *mode = [searchCfg[@"mode"] isKindOfClass:[NSString class]] ? searchCfg[@"mode"] : @"off";
-    NSString *query = [self searchLastUserText:messages];
-    __weak typeof(self) weakSelf = self;
+    NSString *question = [self searchLastUserText:messages];
+    NSString *rid = requestId ?: @"";
+    __weak WebViewController *weakSelf = self;
 
+    // Follow-up round: same conversation, search results injected, tools off.
+    NSMutableDictionary *noToolsConfig = [config mutableCopy] ?: [NSMutableDictionary dictionary];
+    NSMutableDictionary *noToolsSearch = [searchCfg mutableCopy] ?: [NSMutableDictionary dictionary];
+    noToolsSearch[@"noTools"] = @YES;
+    noToolsConfig[@"search"] = noToolsSearch;
+
+    // Answers with the given prefetched context injected as a system message
+    // (empty context = answer from the model's own knowledge).
     void (^answerWith)(NSString *context) = ^(NSString *context) {
-        if (weakSelf == nil) {
+        WebViewController *strongSelf = weakSelf;
+        if (!strongSelf) {
             return;
         }
         NSArray *finalMessages = context.length
-            ? [weakSelf searchMessagesByInjecting:context into:messages]
+            ? [strongSelf searchMessagesByInjecting:context into:messages]
             : messages;
-        [weakSelf.ai startChatWithConfig:config requestId:requestId messages:finalMessages
-                                   image:image thinking:thinking
-                                 onDelta:onDelta onReasoning:onReasoning
-                                  onDone:onDone onError:onError];
+        [strongSelf.ai startChatWithConfig:noToolsConfig requestId:requestId messages:finalMessages
+                                     image:image thinking:thinking
+                                   onDelta:onDelta onReasoning:onReasoning
+                                    onDone:onDone onError:onError];
     };
+
+    // Searches for one query, then answers once with the results injected.
     void (^searchThenAnswer)(NSString *searchQuery) = ^(NSString *searchQuery) {
-        if (weakSelf == nil) {
+        WebViewController *strongSelf = weakSelf;
+        if (!strongSelf) {
             return;
         }
-        [weakSelf runSearchForQuery:searchQuery config:config requestId:requestId
-                         completion:^(NSString *context, NSArray *items) {
+        if (searchQuery.length == 0) {
+            answerWith(nil);
+            return;
+        }
+        [strongSelf sendToWeb:@{ @"type": @"searching", @"requestId": rid }];
+        [strongSelf runSearchForQuery:searchQuery config:config requestId:requestId
+                           completion:^(NSString *context, NSArray *items) {
             (void)items;
-            answerWith(context);
+            WebViewController *inner = weakSelf;
+            if (!inner) {
+                return;
+            }
+            if (rid.length && [inner.cancelledRequestId isEqualToString:rid]) {
+                return;
+            }
+            answerWith(context.length ? context : SearchFailureNote());
         }];
     };
 
-    if ([mode isEqualToString:@"off"] || query.length == 0) {
+    // The model asked for the web: search, then let the caller issue the
+    // follow-up request. Returning YES keeps this round from emitting `done`.
+    AIToolCallBlock toolHandler = ^BOOL(NSArray *queries) {
+        WebViewController *strongSelf = weakSelf;
+        if (!strongSelf) {
+            return NO;
+        }
+        NSString *toolQuery = queries.count ? queries[0] : @"";
+        if (toolQuery.length == 0) {
+            return NO;
+        }
+        searchThenAnswer(toolQuery);
+        return YES;
+    };
+
+    // Endpoint rejected `tools` -> degrade to the planner path once.
+    __block BOOL retriedWithoutTools = NO;
+    AIErrorBlock errorWrap = ^(NSString *message, NSInteger code) {
+        WebViewController *strongSelf = weakSelf;
+        if (!strongSelf) {
+            return;
+        }
+        BOOL toolRejected = (code == 400 || code == 422);
+        if (!retriedWithoutTools && toolRejected && [mode isEqualToString:@"auto"]) {
+            retriedWithoutTools = YES;
+            strongSelf.ai.toolCallHandler = nil;
+            [strongSelf appendLog:[NSString stringWithFormat:@"tools rejected (%ld); using search planner", (long)code]];
+            [strongSelf decideSearchQueryFor:question config:config completion:^(NSString *decided) {
+                if (decided.length) {
+                    searchThenAnswer(decided);
+                } else {
+                    answerWith(nil);
+                }
+            }];
+            return;
+        }
+        if (onError) {
+            onError(message, code);
+        }
+    };
+
+    if ([mode isEqualToString:@"off"] || question.length == 0) {
+        self.ai.toolCallHandler = nil;
         return [self.ai startChatWithConfig:config requestId:requestId messages:messages
                                       image:image thinking:thinking
                                     onDelta:onDelta onReasoning:onReasoning
                                      onDone:onDone onError:onError];
     }
     if ([mode isEqualToString:@"force"]) {
-        searchThenAnswer(query);
+        self.ai.toolCallHandler = nil;
+        searchThenAnswer(question);
         return requestId;
     }
-    // auto: let the model decide whether this question needs a search, and what to search for
-    [self decideSearchQueryFor:query config:config completion:^(NSString *decided) {
-        if (decided.length) {
-            searchThenAnswer(decided);
-        } else {
-            answerWith(nil);
-        }
-    }];
-    return requestId;
+    // auto: the model itself decides whether this turn needs the live web.
+    self.ai.toolCallHandler = toolHandler;
+    return [self.ai startChatWithConfig:config requestId:requestId messages:messages
+                                  image:image thinking:thinking
+                                onDelta:onDelta onReasoning:onReasoning
+                                 onDone:onDone onError:errorWrap];
 }
 
 #pragma mark - Image picker

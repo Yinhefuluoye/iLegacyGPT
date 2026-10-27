@@ -306,6 +306,11 @@ export class App {
         this.appendReasoning(String(m.text || ''));
       }
     });
+    this.bridge.on('searching', (m: Msg) => {
+      if (m.requestId === this.requestId) {
+        this.showSearching();
+      }
+    });
     this.bridge.on('done', (m: Msg) => {
       if (m.requestId === this.requestId) {
         this.finish(true);
@@ -886,6 +891,22 @@ export class App {
     this.scheduleStreamRender(last);
   }
 
+  private showSearching(): void {
+    const last = this.messages[this.messages.length - 1];
+    if (!last || last.role !== 'assistant') {
+      return;
+    }
+    const wrap = this.threadInner.querySelector('[data-id="' + last.id + '"]') as HTMLElement | null;
+    if (!wrap) {
+      return;
+    }
+    const label = wrap.querySelector('.thinking-label') as HTMLElement | null;
+    if (label) {
+      label.textContent = '正在联网搜索…';
+    }
+    this.scrollToBottom(false);
+  }
+
   private appendReasoning(chunk: string): void {
     const last = this.messages[this.messages.length - 1];
     if (!last || last.role !== 'assistant') {
@@ -895,6 +916,11 @@ export class App {
     const wrap = this.threadInner.querySelector('[data-id="' + last.id + '"]') as HTMLElement | null;
     if (!wrap) {
       return;
+    }
+    // a follow-up round may still show the "searching" placeholder
+    const thinkingLabel = wrap.querySelector('.thinking-label') as HTMLElement | null;
+    if (thinkingLabel) {
+      thinkingLabel.textContent = '正在思考…';
     }
     let box = wrap.querySelector('.reasoning') as HTMLElement | null;
     if (!box) {

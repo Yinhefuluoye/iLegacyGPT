@@ -1906,6 +1906,11 @@ svg { display: block; }
           this.appendReasoning(String(m.text || ""));
         }
       });
+      this.bridge.on("searching", (m) => {
+        if (m.requestId === this.requestId) {
+          this.showSearching();
+        }
+      });
       this.bridge.on("done", (m) => {
         if (m.requestId === this.requestId) {
           this.finish(true);
@@ -2430,6 +2435,21 @@ svg { display: block; }
       }
       this.scheduleStreamRender(last);
     }
+    showSearching() {
+      const last = this.messages[this.messages.length - 1];
+      if (!last || last.role !== "assistant") {
+        return;
+      }
+      const wrap = this.threadInner.querySelector('[data-id="' + last.id + '"]');
+      if (!wrap) {
+        return;
+      }
+      const label = wrap.querySelector(".thinking-label");
+      if (label) {
+        label.textContent = "\u6B63\u5728\u8054\u7F51\u641C\u7D22\u2026";
+      }
+      this.scrollToBottom(false);
+    }
     appendReasoning(chunk) {
       const last = this.messages[this.messages.length - 1];
       if (!last || last.role !== "assistant") {
@@ -2439,6 +2459,10 @@ svg { display: block; }
       const wrap = this.threadInner.querySelector('[data-id="' + last.id + '"]');
       if (!wrap) {
         return;
+      }
+      const thinkingLabel = wrap.querySelector(".thinking-label");
+      if (thinkingLabel) {
+        thinkingLabel.textContent = "\u6B63\u5728\u601D\u8003\u2026";
       }
       let box = wrap.querySelector(".reasoning");
       if (!box) {

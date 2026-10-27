@@ -16,6 +16,7 @@
 @property (nonatomic, assign) BOOL stopped;
 @property (nonatomic, assign) BOOL flushScheduled;
 @property (nonatomic, strong) NSDictionary *usage;
+@property (nonatomic, strong) NSMutableArray *toolCalls; /* {id,name,arguments} by index */
 @property (nonatomic, copy) AIDeltaBlock onDelta;
 @property (nonatomic, copy) AIDeltaBlock onReasoning;
 @property (nonatomic, copy) AIDoneBlock onDone;
@@ -128,6 +129,119 @@ static NSString *ErrorTextFromBody(NSData *body, NSInteger statusCode) {
         text = [text substringToIndex:300];
     }
     return [NSString stringWithFormat:@"请求失败（HTTP %ld）：%@", (long)statusCode, text ?: @""];
+}
+
+#pragma mark - Web search tool
+
+// Whether this request should advertise `tools` to the model. `noTools` is set
+// on the follow-up round (after a search) so a turn can never loop forever.
+static BOOL ConfigWantsTools(NSDictionary *config) {
+    if (![config isKindOfClass:[NSDictionary class]]) {
+        return NO;
+    }
+    id search = config[@"search"];
+    if (![search isKindOfClass:[NSDictionary class]]) {
+        return NO;
+    }
+    if ([search[@"noTools"] boolValue]) {
+        return NO;
+    }
+    id mode = search[@"mode"];
+    return [mode isKindOfClass:[NSString class]] && ![mode isEqualToString:@"off"];
+}
+
+static NSArray *WebSearchTools(void) {
+    NSDictionary *function = @{
+        @"name": @"web_search",
+        @"description": [@"Search the live web for current information that you cannot know reliably "
+                         @"from training data, such as news, prices, weather, schedules, sports results, "
+                         @"software versions or anything happening recently. Call this whenever the answer "
+                         @"depends on fresh facts. Prefer queries that surface concrete article pages "
+                         @"(news posts, documentation, blog entries, release notes) rather than homepages "
+                         @"or section index pages. Return one short, specific query; results come back "
+                         @"as numbered web pages you must cite as [1], [2] in your answer." copy],
+        @"parameters": @{
+            @"type": @"object",
+            @"properties": @{
+                @"queries": @{
+                    @"type": @"array",
+                    @"items": @{ @"type": @"string" },
+                    @"description": @"One short, specific keyword query (only the first entry is used)."
+                }
+            },
+            @"required": @[ @"queries" ]
+        }
+    };
+    return @[ @{ @"type": @"function", @"function": function } ];
+}
+
+static void MergeToolCallChunk(NSMutableArray *slots, id raw) {
+    if (![raw isKindOfClass:[NSDictionary class]]) {
+        return;
+    }
+    NSInteger index = (NSInteger)slots.count;
+    id rawIndex = raw[@"index"];
+    if ([rawIndex respondsToSelector:@selector(integerValue)]) {
+        index = [rawIndex integerValue];
+    }
+    if (index < 0) {
+        index = 0;
+    }
+    while ((NSInteger)slots.count <= index) {
+        [slots addObject:[@{ @"id": @"", @"name": @"", @"arguments": @"" } mutableCopy]];
+    }
+    NSMutableDictionary *slot = slots[(NSUInteger)index];
+    id callId = raw[@"id"];
+    if ([callId isKindOfClass:[NSString class]] && [callId length] > 0) {
+        slot[@"id"] = callId;
+    }
+    id function = raw[@"function"];
+    if ([function isKindOfClass:[NSDictionary class]]) {
+        id name = function[@"name"];
+        if ([name isKindOfClass:[NSString class]] && [name length] > 0) {
+            slot[@"name"] = name;
+        }
+        id arguments = function[@"arguments"];
+        if ([arguments isKindOfClass:[NSString class]] && [arguments length] > 0) {
+            // arguments arrive as fragments; concatenate them by index
+            slot[@"arguments"] = [slot[@"arguments"] stringByAppendingString:arguments];
+        }
+    }
+}
+
+static NSArray *QueriesFromToolCalls(NSArray *calls) {
+    NSMutableArray *out = [NSMutableArray array];
+    for (id item in calls) {
+        if (![item isKindOfClass:[NSDictionary class]]) {
+            continue;
+        }
+        id arguments = item[@"arguments"];
+        if (![arguments isKindOfClass:[NSString class]] || [arguments length] == 0) {
+            continue;
+        }
+        NSData *data = [arguments dataUsingEncoding:NSUTF8StringEncoding];
+        id parsed = [NSJSONSerialization JSONObjectWithData:data options:0 error:NULL];
+        if (![parsed isKindOfClass:[NSDictionary class]]) {
+            continue;
+        }
+        id queries = parsed[@"queries"];
+        if ([queries isKindOfClass:[NSArray class]]) {
+            for (id query in queries) {
+                if ([query isKindOfClass:[NSString class]]) {
+                    NSString *trim = Trimmed(query);
+                    if (trim.length) {
+                        [out addObject:trim];
+                    }
+                }
+            }
+        } else if ([queries isKindOfClass:[NSString class]]) {
+            NSString *trim = Trimmed(queries);
+            if (trim.length) {
+                [out addObject:trim];
+            }
+        }
+    }
+    return out;
 }
 
 #pragma mark - Service
@@ -344,6 +458,11 @@ static NSString *ErrorTextFromBody(NSData *body, NSInteger statusCode) {
     body[@"messages"] = chatMessages;
     body[@"stream"] = @YES;
 
+    if (ConfigWantsTools(config) && self.toolCallHandler != nil) {
+        body[@"tools"] = WebSearchTools();
+        body[@"tool_choice"] = @"auto";
+    }
+
     if ([thinking isKindOfClass:[NSDictionary class]] && [thinking[@"enabled"] boolValue]) {
         id params = thinking[@"params"];
         if ([params isKindOfClass:[NSDictionary class]]) {
@@ -399,6 +518,7 @@ static NSString *ErrorTextFromBody(NSData *body, NSInteger statusCode) {
     state.pendingText = [NSMutableString string];
     state.pendingReasoning = [NSMutableString string];
     state.body = [NSMutableData data];
+    state.toolCalls = [NSMutableArray array];
     state.onDelta = onDelta;
     state.onReasoning = onReasoning;
     state.onDone = onDone;
@@ -479,6 +599,20 @@ static NSString *ErrorTextFromBody(NSData *body, NSInteger statusCode) {
     }
     state.finished = YES;
     [self flushState:state];
+
+    // The model asked for a tool: hand the turn back to the caller, which runs
+    // the search and issues the follow-up request. No `done` here, otherwise the
+    // UI would stop streaming while the answer round has not started yet.
+    NSArray *queries = QueriesFromToolCalls(state.toolCalls);
+    AIToolCallBlock toolHandler = self.toolCallHandler;
+    if (queries.count > 0 && toolHandler && !state.stopped) {
+        NSLog(@"[ChatAI] tool_calls queries=%@", queries);
+        if (toolHandler(queries)) {
+            return;
+        }
+        NSLog(@"[ChatAI] tool_calls not handled, finishing normally");
+    }
+
     NSDictionary *usage = state.usage;
     AIDoneBlock done = state.onDone;
     if (done) {
@@ -546,6 +680,12 @@ static NSString *ErrorTextFromBody(NSData *body, NSInteger statusCode) {
         if ([reasoning isKindOfClass:[NSString class]] && [reasoning length] > 0) {
             [state.pendingReasoning appendString:reasoning];
             [self scheduleFlush:state];
+        }
+        id toolCalls = delta[@"tool_calls"];
+        if ([toolCalls isKindOfClass:[NSArray class]]) {
+            for (id raw in toolCalls) {
+                MergeToolCallChunk(state.toolCalls, raw);
+            }
         }
     }
     id finish = choice[@"finish_reason"];
@@ -713,6 +853,12 @@ didCompleteWithError:(NSError *)error {
                 id content = msg[@"content"];
                 if ([content isKindOfClass:[NSString class]] && [content length]) {
                     [state.pendingText appendString:content];
+                }
+                id toolCalls = msg[@"tool_calls"];
+                if ([toolCalls isKindOfClass:[NSArray class]]) {
+                    for (id raw in toolCalls) {
+                        MergeToolCallChunk(state.toolCalls, raw);
+                    }
                 }
             }
             [self finishState:state];

@@ -1,33 +1,56 @@
-[![README: English](https://img.shields.io/badge/README-English-8a8f88?style=flat-square)](README.md)
-[![README: 简体中文](https://img.shields.io/badge/README-%E7%AE%80%E4%BD%93%E4%B8%AD%E6%96%87-bf8a4b?style=flat-square)](README.zh-CN.md)
-
-<div align="center">
-
-<img src="docs/assets/logo.png" width="128" alt="iLegacyGPT">
-
 # iLegacyGPT
 
-**给老 iOS 设备用的大模型客户端。** iPad 4（iPad3,4 / A6X / armv7 / iOS 10.3.4）实测可用。
+面向旧版 iOS 设备的对话客户端，可连接任意 OpenAI 兼容接口。
+无账号、无遥测、无服务端组件；API Key 仅保存在设备本地。
 
-无登录、无账号、无遥测；直接连接任意 OpenAI 兼容接口，API Key 只存在你自己的设备里。
+`Objective-C + TypeScript` · `MIT` · [![release](https://img.shields.io/github/v/release/Yinhefuluoye/iLegacyGPT?style=flat-square)](../../releases)
 
-`v1.2.0` · Objective-C + TypeScript · MIT
+[English](README.md)
 
-</div>
+## 兼容性
 
----
+| 项目 | 值 |
+| --- | --- |
+| 验证设备 | iPad 4（iPad3,4，A6X，armv7），iOS 10.3.4 |
+| 最低系统 | 9.3 |
+| 架构 | armv7、arm64 |
+| 安装方式 | 未签名 IPA，需 AppSync Unified 或自行签名 |
 
-## 这是什么
+| 平台 | 状态 |
+| --- | --- |
+| iPad 4（armv7），iOS 10.3.4 | 已验证 |
+| armv7，iOS 9.3.5 / 9.3.6：iPad 2、iPad 3、iPhone 4S、iPod touch 5 | 未验证 |
+| arm64，iOS 9 / 10：iPhone 5s 至 iPhone 7 | 未验证 |
+| iOS 11 及以上 | 未验证 |
+| iOS 9.3 以下 | 不支持 |
 
-一台 10 年前的 iPad，跑不动新版 App，也不支持新系统。这个项目的目标只有一个：**让老设备也能用大模型**。
+## 安装
 
-做法是「原生外壳 + Web UI」：
+1. 在设备上安装 **AppSync Unified**，或准备签名工具。
+2. 从 [Releases](../../releases) 下载 IPA。
+3. 使用爱思助手、ipatool 或任意签名工具安装。
+4. 打开应用，进入设置，填写 provider、Base URL、端口与 API Key。
+5. 刷新模型列表并选择模型。
 
-- **Objective-C 外壳**（Theos 布局、clang 直编）+ `WKWebView` 渲染界面；
-- 界面用 **TypeScript** 写成单文件产物，塞进 `WKWebView`，避开 iOS 10 缺失的所有新 API；
-- 网络、配置、会话存储全部在原生层完成，Web 只负责画界面。
+## 配置
 
-它**不提供**任何 API 或 Key，你需要在设置里填自己的 OpenAI 兼容服务。
+- **接口**：任意 OpenAI 兼容 API。Base URL、端口与 Key 保存在应用沙盒内。
+- **思考档位**：关闭、低、中、高。以 `reasoning_effort` 下发；Qwen 系端点使用 `enable_thinking` 与 `thinking_budget`。
+- **联网搜索**：关闭、自动、强制。
+  - `auto` 注册 `web_search` 工具，由模型决定是否调用。
+  - `force` 在首次请求前执行检索。
+  - 检索结果以带编号的来源列表附加在回答后，可点开链接。
+- **字号**：在设置中调整，保存在设备本地。
+
+## 功能
+
+- 流式输出，思考过程可展开。
+- 联网搜索使用真实 function calling；网关拒绝 `tools` 时降级为查询规划器。
+- Markdown 渲染：表格（支持列对齐）、任务列表、嵌套列表、删除线、链接、代码块。
+- 会话归档按今天、近 7 天、更早分组，支持重命名与删除。
+- 支持从相册发送图片，历史记录保留 320px 缩略图。
+- 每次请求附带当前时间与时区。
+- 界面打包为单个自包含 HTML 文件；UI 为 ES5，不使用 iOS 9/10 缺失的 WebKit 特性。
 
 ## 截图
 
@@ -35,102 +58,40 @@
 | --- | --- | --- | --- |
 | <img src="docs/screenshots/01-home.png" width="220"> | <img src="docs/screenshots/02-thinking.png" width="260"> | <img src="docs/screenshots/03-sessions.png" width="260"> | <img src="docs/screenshots/04-settings.png" width="260"> |
 
-| 联网搜索（带来源列表） | Markdown 表格与任务列表 | 图片发送 |
+| 联网搜索与来源列表 | Markdown 表格与任务列表 | 图片发送 |
 | --- | --- | --- |
 | <img src="docs/screenshots/06-search.png" width="260"> | <img src="docs/screenshots/07-table.png" width="420"> | <img src="docs/screenshots/05-image.png" width="260"> |
 
-## 特性
+## 从源码构建
 
-- **任意 OpenAI 兼容接口**：自定义 provider / Base URL / 端口 / API Key，模型列表自动拉取；
-- **思考档位**：关闭 / 低 / 中 / 高，按网关支持的参数下发（`reasoning_effort`、`enable_thinking` 或自定义键值对）；
-- **联网搜索**：关闭 / 自动 / 强制三态；「自动」走**真 function calling**（`web_search` 工具），由模型自己决定搜不搜，结果以带编号的来源列表呈现、可点开链接；
-- **流式输出 + 思考过程**：先显示思考要点，可点开看完整思考，再逐字吐正文；
-- **Markdown**：表格（支持对齐、宽表横向滑动）、任务列表、嵌套列表、代码块、链接；
-- **会话归档**：左侧抽屉按「今天 / 近 7 天 / 更早」分组，左滑重命名、删除；
-- **图片上传**：从相册选图发送，历史里保留 320px 缩略图；
-- **数据只在本机**：会话、配置、Key 全部存在 App 沙盒，卸载即消失；
-- **armv7 + arm64 双架构**：同一个包能装 32 位机（iPad 4、iPhone 5/5c）与跑 iOS 9/10 的 64 位机（iPhone 5s ~ 7）；
-- **为老 WebKit 定制**：界面 JS 编译到 **ES5**（iOS 9 没有 `let`/箭头函数），不用 `gap`、`inset`、`backdrop-filter`、`classList.toggle(cls, force)` 等新特性，构建脚本会拦截违规 CSS 并复查 ES5。
-
-## 支持范围
-
-| 项目 | 状态 |
-| --- | --- |
-| iPad 4（iPad3,4，armv7）+ iOS 10.3.4 | ✅ 实测 |
-| armv7 + iOS 9.3.5 / 9.3.6（iPad 2/3、iPhone 4S、iPod touch 5） | ⚠️ 已支持，未实测 |
-| arm64 + iOS 9 / 10（iPhone 5s ~ 7） | ⚠️ 已支持，未实测 |
-| iOS 9.3 以下 | ❌ 缺 CSS 自定义属性 |
-| iOS 11 及以上 | ❔ 未验证 |
-| 越狱插件 | 不需要（AppSync + 未签名 IPA 即可） |
-
-## 安装
-
-> 需要设备已安装 **AppSync Unified**（或使用自签名工具重签），否则无法安装未签名 IPA。
-
-1. 到 [Releases](../../releases) 下载 `iLegacyGPT-1.2.0.ipa`；
-2. 用爱思助手 / ipatool / 自签名工具安装；
-3. 打开 App → 右上角设置 → 填写 **provider、Base URL、端口、API Key**，拉一次模型列表。
-
-> 安装包未签名、不含任何 Apple 资源，仅用于已越狱或可自签名的个人设备。
-
-## 快速开始
-
-1. 设置 → 选择 provider（OpenAI / 自定义）→ 填 `Base URL`（例如 `https://api.openai.com`）和端口；
-2. 填 API Key（只存本机）；
-3. 回到首页，输入问题 → 发送；
-4. 想让它「思考」：点输入框里的「思考」，选低/中/高（具体是否生效取决于你的网关是否支持对应参数）。
-
-## 隐私
-
-- **无账号、无遥测、无统计**；
-- API Key 与会话只写入 App 沙盒内的 `store.json` 与配置，不上传任何我们的服务器（我们也没有服务器）；
-- 图片仅在你点击发送时，随请求发往你配置的接口；
-- 卸载 App 即清除全部数据。
-
-详见[隐私说明](PRIVACY.zh-CN.md)与[安全说明](SECURITY.zh-CN.md)；English: [PRIVACY.md](PRIVACY.md) · [SECURITY.md](SECURITY.md)。
-
-## 构建
-
-**环境**：WSL（Ubuntu 22.04）+ Theos + iPhoneOS10.3 SDK + Swift toolchain（详见 [docs/build-wsl.md](docs/build-wsl.md)）。
+工具链：WSL（Ubuntu 22.04）、Theos、iPhoneOS 10.3 SDK。参见 [docs/build-wsl.md](docs/build-wsl.md)。
 
 ```bash
-VERSION=1.2.0 bash tools/build_local.sh
-python tools/package_ipa.py --app ios/.theos/obj/iphone/8.0/ChatAI.app --version 1.2.0 --name iLegacyGPT
+cd web && node build.mjs   # TypeScript -> ES5 bundle -> ios/Resources/web/index.html
+npx tsc --noEmit           # 类型检查
+NAME=iLegacyGPT VERSION=x.y.z bash tools/build_local.sh
 ```
 
-产物：`dist/iLegacyGPT-1.2.0.ipa`（约 100 KB）。
-
-本项目**不使用 CI**：出包全靠本地脚本，WSL 里约 5 秒完成。
+产物为 `dist/iLegacyGPT-<version>.ipa`，同时包含 armv7 与 arm64 两份切片。
 
 ## 目录结构
 
-```
-ios/                     Objective-C 外壳
-  ChatAI/                AppDelegate / WebViewController / 桥接 / AIService / Store
-  Resources/             Info.plist、图标、web/
-web/                     TypeScript 前端（src / prototypes / _preview）
-tools/                   构建、打包、图标、发布脚本
-docs/                    bridge-protocol.md、ui-spec.md、build-wsl.md、截图
-```
+| 路径 | 内容 |
+| --- | --- |
+| `ios/ChatAI/` | 应用源码：窗口、WebView 桥、流式客户端、存储 |
+| `ios/Resources/web/index.html` | 生成的界面产物，CSS 与 JS 已内联 |
+| `web/src/` | TypeScript 与 CSS 源码 |
+| `web/build.mjs` | 打包流程：先由 `tsc` 输出 ES5，再由 esbuild 打包并内联 |
+| `web/_preview/` | 本地截图工具 |
+| `tools/` | 构建、打包与发布脚本 |
+| `docs/` | 协议说明、构建说明、发布说明、图片 |
 
-- 桥接协议（Web ↔ 原生）：[docs/bridge-protocol.md](docs/bridge-protocol.md)
-- UI 规范：[docs/ui-spec.md](docs/ui-spec.md)
+## 隐私与安全
 
-## 已知限制
-
-- 只编了 **armv7**，64 位设备装不上；
-- 历史消息里的图片只保留 **320px 缩略图**，原图不落盘（重新打开会话无法继续「带着那张图」提问）；
-- 思考档位是否生效取决于你的网关：有的网关忽略 `reasoning_effort`，需要在设置里改用自定义参数；
-- iOS 10 的 WebKit 很老：不支持 flex `gap`、`inset`、`backdrop-filter`、可选链等，改 UI 请先看 `web/build.mjs` 里的禁用列表；
-- 未签名 IPA，安装门槛是越狱 / AppSync 或自签名。
-
-## 免责声明
-
-- 本项目**与 OpenAI 无任何关联**，也未获得任何形式的授权或认可；名称中的 `GPT` 仅指代通用大语言模型；
-- 项目**不提供、也不包含**任何 API Key 或代理服务，使用者需自行准备合规的接口；
-- 未签名 IPA 仅面向已越狱或可自签名的**个人设备**，请遵守你所在地区的法律法规与平台条款；
-- 软件按「原样」提供，作者不对使用后果、数据丢失或账号风险负责。
+除发送给用户自行配置的接口外，应用不向外部传输任何数据。
+参见 [PRIVACY.zh-CN.md](PRIVACY.zh-CN.md) 与 [SECURITY.zh-CN.md](SECURITY.zh-CN.md)。
 
 ## 许可
 
-[MIT](LICENSE)
+MIT。与 OpenAI 无关联；`GPT` 指代通用大语言模型。
+本项目不包含 API Key 与代理服务，按原样提供。

@@ -345,13 +345,28 @@ static NSString *ErrorTextFromBody(NSData *body, NSInteger statusCode) {
     body[@"stream"] = @YES;
 
     if ([thinking isKindOfClass:[NSDictionary class]] && [thinking[@"enabled"] boolValue]) {
-        NSString *param = thinking[@"param"];
-        if (![param isKindOfClass:[NSString class]] || param.length == 0) {
-            param = @"reasoning_effort";
-        }
-        id value = ConvertScalarValue(thinking[@"onValue"]);
-        if (value) {
-            body[param] = value;
+        id params = thinking[@"params"];
+        if ([params isKindOfClass:[NSDictionary class]]) {
+            // preferred form: {params: {"reasoning_effort": "high"}}
+            for (NSString *key in params) {
+                if (![key isKindOfClass:[NSString class]] || key.length == 0) {
+                    continue;
+                }
+                id value = ConvertScalarValue(params[key]);
+                if (value) {
+                    body[key] = value;
+                }
+            }
+        } else {
+            // legacy form: {param: "reasoning_effort", onValue: "high"}
+            NSString *param = thinking[@"param"];
+            if (![param isKindOfClass:[NSString class]] || param.length == 0) {
+                param = @"reasoning_effort";
+            }
+            id value = ConvertScalarValue(thinking[@"onValue"]);
+            if (value) {
+                body[param] = value;
+            }
         }
     }
 

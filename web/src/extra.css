@@ -108,6 +108,44 @@
   padding-bottom: calc(16px + var(--kb, 0px));
 }
 
+/* settings: helper line under a field */
+.field-note {
+  margin: 6px 0 0;
+  font-size: 12px;
+  line-height: 1.5;
+  color: rgba(27, 29, 26, 0.42);
+}
+
+/* reasoning / thinking trace quoted above the answer */
+.reasoning {
+  margin: 0 0 10px;
+  padding: 9px 12px;
+  border-left: 2px solid rgba(185, 138, 75, 0.45);
+  border-radius: 0 8px 8px 0;
+  background: rgba(185, 138, 75, 0.055);
+}
+
+.reasoning-head {
+  font-size: 12px;
+  line-height: 1.4;
+  color: rgba(27, 29, 26, 0.45);
+  margin-bottom: 4px;
+}
+
+.reasoning-body {
+  font-size: 13px;
+  line-height: 1.55;
+  color: rgba(27, 29, 26, 0.62);
+  white-space: pre-wrap;
+  word-break: break-word;
+  max-height: 5em;
+  overflow: hidden;
+}
+
+.reasoning.is-open .reasoning-body {
+  max-height: none;
+}
+
 /* thinking label colour, matches prototype tokens */
 .thinking-label {
   font-size: 15px;

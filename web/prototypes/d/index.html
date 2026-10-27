@@ -1004,6 +1004,21 @@ svg { display: block; }
         <input class="field-input" id="apiKey" type="password" value="sk-proto-000000000000" placeholder="sk-...">
       </div>
 
+      <div class="field">
+        <label class="field-label" for="thinkParamSelect">思考参数</label>
+        <div class="select-shell">
+          <select id="thinkParamSelect">
+            <option value="auto">自动（按模型判断）</option>
+            <option value="reasoning_effort">reasoning_effort（OpenAI 系）</option>
+            <option value="enable_thinking">enable_thinking（Qwen / 百炼）</option>
+            <option value="thinking_budget">thinking_budget</option>
+            <option value="off">不发送</option>
+          </select>
+          <span class="select-caret"></span>
+        </div>
+        <p class="field-note" id="thinkParamNote"></p>
+      </div>
+
       <button class="wide-btn is-primary" id="refreshModelsBtn" type="button">刷新模型列表</button>
       <div class="sheet-divider"></div>
       <button class="wide-btn is-danger" id="clearChatBtn" type="button">清空对话</button>

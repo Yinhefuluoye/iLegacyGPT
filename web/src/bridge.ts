@@ -136,11 +136,19 @@ export class Bridge {
     if (op === 'chat.start') {
       const rid = payload.requestId;
       const text = MOCK_REPLY;
+      const reasoning = MOCK_REASONING;
+      let ri = 0;
       let i = 0;
       if (this.mockTimer) {
         window.clearInterval(this.mockTimer);
       }
       this.mockTimer = window.setInterval(function () {
+        if (ri < reasoning.length) {
+          const rn = Math.min(reasoning.length, ri + 5);
+          self.receive({ type: 'reasoning', requestId: rid, text: reasoning.slice(ri, rn) });
+          ri = rn;
+          return;
+        }
         const next = Math.min(text.length, i + 3);
         const chunk = text.slice(i, next);
         i = next;
@@ -238,3 +246,8 @@ const MOCK_REPLY =
   '- 网络层只做一个转发接口，不做账号体系\n' +
   '- 配置全部存在本机，换模型时不改动界面\n\n' +
   '需要我把它拆成可执行的任务清单吗？';
+
+const MOCK_REASONING =
+  '先看约束：32 位设备、iOS 10、WKWebView 只负责渲染。' +
+  '界面越少越好，所以核心是输入框 + 一处设置。' +
+  '网络层只做转发，不引入账号体系，配置留在本机即可。';

@@ -935,6 +935,44 @@ svg { display: block; }
   padding-bottom: calc(16px + var(--kb, 0px));
 }
 
+/* settings: helper line under a field */
+.field-note {
+  margin: 6px 0 0;
+  font-size: 12px;
+  line-height: 1.5;
+  color: rgba(27, 29, 26, 0.42);
+}
+
+/* reasoning / thinking trace quoted above the answer */
+.reasoning {
+  margin: 0 0 10px;
+  padding: 9px 12px;
+  border-left: 2px solid rgba(185, 138, 75, 0.45);
+  border-radius: 0 8px 8px 0;
+  background: rgba(185, 138, 75, 0.055);
+}
+
+.reasoning-head {
+  font-size: 12px;
+  line-height: 1.4;
+  color: rgba(27, 29, 26, 0.45);
+  margin-bottom: 4px;
+}
+
+.reasoning-body {
+  font-size: 13px;
+  line-height: 1.55;
+  color: rgba(27, 29, 26, 0.62);
+  white-space: pre-wrap;
+  word-break: break-word;
+  max-height: 5em;
+  overflow: hidden;
+}
+
+.reasoning.is-open .reasoning-body {
+  max-height: none;
+}
+
 /* thinking label colour, matches prototype tokens */
 .thinking-label {
   font-size: 15px;
@@ -1118,6 +1156,21 @@ svg { display: block; }
         <input class="field-input" id="apiKey" type="password" value="sk-proto-000000000000" placeholder="sk-...">
       </div>
 
+      <div class="field">
+        <label class="field-label" for="thinkParamSelect">思考参数</label>
+        <div class="select-shell">
+          <select id="thinkParamSelect">
+            <option value="auto">自动（按模型判断）</option>
+            <option value="reasoning_effort">reasoning_effort（OpenAI 系）</option>
+            <option value="enable_thinking">enable_thinking（Qwen / 百炼）</option>
+            <option value="thinking_budget">thinking_budget</option>
+            <option value="off">不发送</option>
+          </select>
+          <span class="select-caret"></span>
+        </div>
+        <p class="field-note" id="thinkParamNote"></p>
+      </div>
+
       <button class="wide-btn is-primary" id="refreshModelsBtn" type="button">刷新模型列表</button>
       <div class="sheet-divider"></div>
       <button class="wide-btn is-danger" id="clearChatBtn" type="button">清空对话</button>
@@ -1260,11 +1313,19 @@ svg { display: block; }
       if (op === "chat.start") {
         const rid = payload.requestId;
         const text = MOCK_REPLY;
+        const reasoning = MOCK_REASONING;
+        let ri = 0;
         let i = 0;
         if (this.mockTimer) {
           window.clearInterval(this.mockTimer);
         }
         this.mockTimer = window.setInterval(function() {
+          if (ri < reasoning.length) {
+            const rn = Math.min(reasoning.length, ri + 5);
+            self.receive({ type: "reasoning", requestId: rid, text: reasoning.slice(ri, rn) });
+            ri = rn;
+            return;
+          }
           const next = Math.min(text.length, i + 3);
           const chunk = text.slice(i, next);
           i = next;
@@ -1348,6 +1409,7 @@ svg { display: block; }
   };
   var MOCK_MODELS = ["deepseek-chat", "deepseek-reasoner", "gpt-4o-mini", "qwen-max"];
   var MOCK_REPLY = "\u597D\u7684\uFF0C\u5148\u7ED9\u4F60\u4E00\u4E2A\u6700\u5C0F\u53EF\u884C\u65B9\u6848\uFF1A\n\n- \u754C\u9762\u53EA\u4FDD\u7559\u4E00\u4E2A\u8F93\u5165\u5165\u53E3\u548C\u4E00\u5904\u8BBE\u7F6E\n- \u7F51\u7EDC\u5C42\u53EA\u505A\u4E00\u4E2A\u8F6C\u53D1\u63A5\u53E3\uFF0C\u4E0D\u505A\u8D26\u53F7\u4F53\u7CFB\n- \u914D\u7F6E\u5168\u90E8\u5B58\u5728\u672C\u673A\uFF0C\u6362\u6A21\u578B\u65F6\u4E0D\u6539\u52A8\u754C\u9762\n\n\u9700\u8981\u6211\u628A\u5B83\u62C6\u6210\u53EF\u6267\u884C\u7684\u4EFB\u52A1\u6E05\u5355\u5417\uFF1F";
+  var MOCK_REASONING = "\u5148\u770B\u7EA6\u675F\uFF1A32 \u4F4D\u8BBE\u5907\u3001iOS 10\u3001WKWebView \u53EA\u8D1F\u8D23\u6E32\u67D3\u3002\u754C\u9762\u8D8A\u5C11\u8D8A\u597D\uFF0C\u6240\u4EE5\u6838\u5FC3\u662F\u8F93\u5165\u6846 + \u4E00\u5904\u8BBE\u7F6E\u3002\u7F51\u7EDC\u5C42\u53EA\u505A\u8F6C\u53D1\uFF0C\u4E0D\u5F15\u5165\u8D26\u53F7\u4F53\u7CFB\uFF0C\u914D\u7F6E\u7559\u5728\u672C\u673A\u5373\u53EF\u3002";
 
   // src/markdown.ts
   function esc(text) {
@@ -1462,6 +1524,7 @@ svg { display: block; }
     { level: 3, name: "\u9AD8", desc: "\u5145\u5206\u63A8\u7406\uFF0C\u590D\u6742\u4EFB\u52A1" }
   ];
   var LEVEL_API = ["", "low", "medium", "high"];
+  var THINK_BUDGET = [1024, 4096, 16384];
   var PROVIDERS = {
     openai: { label: "OpenAI", base: "https://api.openai.com/v1" },
     deepseek: { label: "DeepSeek", base: "https://api.deepseek.com/v1" },
@@ -1622,6 +1685,11 @@ svg { display: block; }
       this.on($("apiPort"), "change", () => this.saveSettings());
       this.on($("apiKey"), "change", () => this.saveSettings());
       this.on($("refreshModelsBtn"), "click", () => this.fetchModels());
+      this.on($("thinkParamSelect"), "change", () => {
+        this.config.thinking.mode = $("thinkParamSelect").value;
+        this.updateThinkParamNote();
+        this.saveConfig();
+      });
       this.on($("clearChatBtn"), "click", () => this.clearAll());
       this.on($("menuBtn"), "click", () => this.openDrawer());
       this.on($("drawerClose"), "click", () => this.closeDrawer());
@@ -1665,6 +1733,11 @@ svg { display: block; }
       this.bridge.on("delta", (m) => {
         if (m.requestId === this.requestId) {
           this.appendDelta(String(m.text || ""));
+        }
+      });
+      this.bridge.on("reasoning", (m) => {
+        if (m.requestId === this.requestId) {
+          this.appendReasoning(String(m.text || ""));
         }
       });
       this.bridge.on("done", (m) => {
@@ -1721,6 +1794,7 @@ svg { display: block; }
         fontSize: Number(cfg.fontSize) || 16,
         thinking: {
           level: Number(cfg.thinking && cfg.thinking.level || 0),
+          mode: cfg.thinking && cfg.thinking.mode || "auto",
           param: cfg.thinking && cfg.thinking.param || "reasoning_effort",
           enabled: !!(cfg.thinking && cfg.thinking.enabled)
         }
@@ -1737,6 +1811,9 @@ svg { display: block; }
       $("apiUrl").value = this.config.baseUrl || "";
       $("apiPort").value = String(this.config.port || 443);
       $("apiKey").value = this.config.apiKey || "";
+      const mode = this.config.thinking && this.config.thinking.mode || "auto";
+      $("thinkParamSelect").value = mode;
+      this.updateThinkParamNote();
     }
     providerKey(baseUrl) {
       const url = String(baseUrl || "");
@@ -1771,6 +1848,56 @@ svg { display: block; }
       this.saveConfig();
     }
     /* ------------------------------------------------------------- think -- */
+    thinkingMode() {
+      const mode = this.config.thinking && this.config.thinking.mode;
+      return typeof mode === "string" && mode ? mode : "auto";
+    }
+    thinkingPayload() {
+      const level = Number(this.config.thinking.level) || 0;
+      if (level <= 0) {
+        return { enabled: false, level: 0, params: {} };
+      }
+      const mode = this.thinkingMode();
+      if (mode === "off") {
+        return { enabled: false, level, params: {} };
+      }
+      const budget = THINK_BUDGET[level - 1] || 4096;
+      if (mode === "enable_thinking") {
+        return { enabled: true, level, params: { enable_thinking: true, thinking_budget: budget } };
+      }
+      if (mode === "thinking_budget") {
+        return { enabled: true, level, params: { thinking_budget: budget } };
+      }
+      if (mode === "reasoning_effort") {
+        return { enabled: true, level, params: { reasoning_effort: LEVEL_API[level] } };
+      }
+      const model = String(this.config.model || "");
+      if (/reasoner|r1|thinking|-think/i.test(model)) {
+        return { enabled: false, level, params: {} };
+      }
+      if (this.providerKey(this.config.baseUrl) === "bailian" || /qwen|qwq/i.test(model)) {
+        return { enabled: true, level, params: { enable_thinking: true, thinking_budget: budget } };
+      }
+      return { enabled: true, level, params: { reasoning_effort: LEVEL_API[level] } };
+    }
+    updateThinkParamNote() {
+      const note = $("thinkParamNote");
+      if (!note) {
+        return;
+      }
+      const payload = this.thinkingPayload();
+      if (!payload.enabled) {
+        note.textContent = "\u5F53\u524D\u8BBE\u7F6E\u4E0D\u4F1A\u53D1\u9001\u601D\u8003\u53C2\u6570\uFF08\u6A21\u578B\u81EA\u8EAB\u601D\u8003\u6216\u5DF2\u5173\u95ED\u6863\u4F4D\uFF09";
+        return;
+      }
+      const parts = [];
+      for (const key in payload.params) {
+        if (Object.prototype.hasOwnProperty.call(payload.params, key)) {
+          parts.push(key + " = " + String(payload.params[key]));
+        }
+      }
+      note.textContent = "\u672C\u6B21\u8BF7\u6C42\u4F1A\u5E26\u4E0A\uFF1A" + parts.join("\uFF0C");
+    }
     updateThinkChip() {
       const level = Number(this.config.thinking.level) || 0;
       this.config.thinking.enabled = level > 0;
@@ -1783,6 +1910,7 @@ svg { display: block; }
         this.thinkChip.setAttribute("aria-pressed", "false");
         this.thinkLabel.textContent = "\u601D\u8003";
       }
+      this.updateThinkParamNote();
     }
     renderThinkList() {
       const level = Number(this.config.thinking.level) || 0;
@@ -1958,14 +2086,7 @@ svg { display: block; }
       this.messages.push(assistant);
       this.appendMessageEl(assistant, true);
       this.scrollToBottom(true);
-      const level = Number(this.config.thinking.level) || 0;
-      const thinking = {
-        enabled: level > 0,
-        level,
-        param: this.config.thinking.param || "reasoning_effort",
-        onValue: LEVEL_API[level] || "",
-        offValue: ""
-      };
+      const thinking = this.thinkingPayload();
       this.bridge.post("chat.start", {
         requestId: this.requestId,
         config: this.config,
@@ -2006,12 +2127,48 @@ svg { display: block; }
       if (wrap && wrap.classList.contains("thinking")) {
         wrap.classList.remove("thinking");
         wrap.classList.add("is-streaming");
-        while (wrap.firstChild) {
-          wrap.removeChild(wrap.firstChild);
+        const placeholder = wrap.querySelector(".thinking-body");
+        if (placeholder && placeholder.parentNode) {
+          placeholder.parentNode.removeChild(placeholder);
         }
-        wrap.appendChild(el("div", "ai-body"));
+        if (!wrap.querySelector(".ai-body")) {
+          wrap.appendChild(el("div", "ai-body"));
+        }
       }
       this.scheduleStreamRender(last);
+    }
+    appendReasoning(chunk) {
+      const last = this.messages[this.messages.length - 1];
+      if (!last || last.role !== "assistant") {
+        return;
+      }
+      last.reasoning = (last.reasoning || "") + chunk;
+      const wrap = this.threadInner.querySelector('[data-id="' + last.id + '"]');
+      if (!wrap) {
+        return;
+      }
+      let box = wrap.querySelector(".reasoning");
+      if (!box) {
+        box = el("div", "reasoning");
+        const head = el("div", "reasoning-head", "\u601D\u8003\u8FC7\u7A0B");
+        const body2 = el("div", "reasoning-body");
+        box.appendChild(head);
+        box.appendChild(body2);
+        const target = box;
+        this.on(head, "click", () => {
+          if (target.classList.contains("is-open")) {
+            target.classList.remove("is-open");
+          } else {
+            target.classList.add("is-open");
+          }
+        });
+        wrap.insertBefore(box, wrap.firstChild);
+      }
+      const body = box.querySelector(".reasoning-body");
+      if (body) {
+        body.textContent = last.reasoning;
+      }
+      this.scrollToBottom(false);
     }
     scheduleStreamRender(msg) {
       if (this.renderTimer) {
@@ -2040,6 +2197,16 @@ svg { display: block; }
           const body = node.querySelector(".ai-body");
           if (body) {
             body.innerHTML = renderMarkdown(last.content || (ok ? "" : "\uFF08\u5DF2\u505C\u6B62\uFF09"));
+          }
+          const rbox = node.querySelector(".reasoning");
+          if (rbox) {
+            rbox.classList.remove("is-open");
+            rbox.classList.add("is-done");
+            const head = rbox.querySelector(".reasoning-head");
+            const chars = (last.reasoning || "").length;
+            if (head && chars) {
+              head.textContent = "\u601D\u8003\u8FC7\u7A0B \xB7 " + chars + " \u5B57\uFF08\u70B9\u6309\u5C55\u5F00\uFF09";
+            }
           }
         }
         if (!last.content) {

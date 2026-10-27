@@ -9,6 +9,7 @@ const LEVELS = [
   { level: 3, name: '高', desc: '充分推理，复杂任务' }
 ];
 const LEVEL_API = ['', 'low', 'medium', 'high'];
+const THINK_BUDGET = [1024, 4096, 16384];
 
 const PROVIDERS: { [key: string]: { label: string; base: string } } = {
   openai: { label: 'OpenAI', base: 'https://api.openai.com/v1' },
@@ -21,6 +22,7 @@ interface Message {
   id: string;
   role: 'user' | 'assistant';
   content: string;
+  reasoning?: string;
   image?: { dataBase64: string; mime: string } | null;
   error?: boolean;
   ts?: number;
@@ -230,6 +232,11 @@ export class App {
     this.on($('apiPort'), 'change', () => this.saveSettings());
     this.on($('apiKey'), 'change', () => this.saveSettings());
     this.on($('refreshModelsBtn'), 'click', () => this.fetchModels());
+    this.on($('thinkParamSelect'), 'change', () => {
+      this.config.thinking.mode = $('thinkParamSelect').value;
+      this.updateThinkParamNote();
+      this.saveConfig();
+    });
     this.on($('clearChatBtn'), 'click', () => this.clearAll());
 
     // session drawer
@@ -277,6 +284,11 @@ export class App {
     this.bridge.on('delta', (m: Msg) => {
       if (m.requestId === this.requestId) {
         this.appendDelta(String(m.text || ''));
+      }
+    });
+    this.bridge.on('reasoning', (m: Msg) => {
+      if (m.requestId === this.requestId) {
+        this.appendReasoning(String(m.text || ''));
       }
     });
     this.bridge.on('done', (m: Msg) => {
@@ -335,6 +347,7 @@ export class App {
       fontSize: Number(cfg.fontSize) || 16,
       thinking: {
         level: Number((cfg.thinking && cfg.thinking.level) || 0),
+        mode: (cfg.thinking && cfg.thinking.mode) || 'auto',
         param: (cfg.thinking && cfg.thinking.param) || 'reasoning_effort',
         enabled: !!(cfg.thinking && cfg.thinking.enabled)
       }
@@ -352,6 +365,9 @@ export class App {
     $('apiUrl').value = this.config.baseUrl || '';
     $('apiPort').value = String(this.config.port || 443);
     $('apiKey').value = this.config.apiKey || '';
+    const mode = (this.config.thinking && this.config.thinking.mode) || 'auto';
+    $('thinkParamSelect').value = mode;
+    this.updateThinkParamNote();
   }
 
   private providerKey(baseUrl: string): string {
@@ -392,6 +408,61 @@ export class App {
 
   /* ------------------------------------------------------------- think -- */
 
+  private thinkingMode(): string {
+    const mode = this.config.thinking && this.config.thinking.mode;
+    return typeof mode === 'string' && mode ? mode : 'auto';
+  }
+
+  private thinkingPayload(): any {
+    const level = Number(this.config.thinking.level) || 0;
+    if (level <= 0) {
+      return { enabled: false, level: 0, params: {} };
+    }
+    const mode = this.thinkingMode();
+    if (mode === 'off') {
+      return { enabled: false, level: level, params: {} };
+    }
+    const budget = THINK_BUDGET[level - 1] || 4096;
+    if (mode === 'enable_thinking') {
+      return { enabled: true, level: level, params: { enable_thinking: true, thinking_budget: budget } };
+    }
+    if (mode === 'thinking_budget') {
+      return { enabled: true, level: level, params: { thinking_budget: budget } };
+    }
+    if (mode === 'reasoning_effort') {
+      return { enabled: true, level: level, params: { reasoning_effort: LEVEL_API[level] } };
+    }
+    // auto: pick something sensible for the configured endpoint/model
+    const model = String(this.config.model || '');
+    if (/reasoner|r1|thinking|-think/i.test(model)) {
+      // the model always reasons, no extra request field needed
+      return { enabled: false, level: level, params: {} };
+    }
+    if (this.providerKey(this.config.baseUrl) === 'bailian' || /qwen|qwq/i.test(model)) {
+      return { enabled: true, level: level, params: { enable_thinking: true, thinking_budget: budget } };
+    }
+    return { enabled: true, level: level, params: { reasoning_effort: LEVEL_API[level] } };
+  }
+
+  private updateThinkParamNote(): void {
+    const note = $('thinkParamNote');
+    if (!note) {
+      return;
+    }
+    const payload = this.thinkingPayload();
+    if (!payload.enabled) {
+      note.textContent = '当前设置不会发送思考参数（模型自身思考或已关闭档位）';
+      return;
+    }
+    const parts: string[] = [];
+    for (const key in payload.params) {
+      if (Object.prototype.hasOwnProperty.call(payload.params, key)) {
+        parts.push(key + ' = ' + String(payload.params[key]));
+      }
+    }
+    note.textContent = '本次请求会带上：' + parts.join('，');
+  }
+
   private updateThinkChip(): void {
     const level = Number(this.config.thinking.level) || 0;
     this.config.thinking.enabled = level > 0;
@@ -404,6 +475,7 @@ export class App {
       this.thinkChip.setAttribute('aria-pressed', 'false');
       this.thinkLabel.textContent = '思考';
     }
+    this.updateThinkParamNote();
   }
 
   private renderThinkList(): void {
@@ -601,14 +673,7 @@ export class App {
     this.appendMessageEl(assistant, true);
     this.scrollToBottom(true);
 
-    const level = Number(this.config.thinking.level) || 0;
-    const thinking = {
-      enabled: level > 0,
-      level: level,
-      param: this.config.thinking.param || 'reasoning_effort',
-      onValue: LEVEL_API[level] || '',
-      offValue: ''
-    };
+    const thinking = this.thinkingPayload();
 
     this.bridge.post('chat.start', {
       requestId: this.requestId,
@@ -652,15 +717,53 @@ export class App {
     last.content += chunk;
     const wrap = this.threadInner.querySelector('[data-id="' + last.id + '"]') as HTMLElement | null;
     if (wrap && wrap.classList.contains('thinking')) {
-      // first token: swap the "正在思考…" placeholder for the real reply body
+      // first token: swap the "正在思考…" placeholder for the real reply body,
+      // keeping any reasoning block that already arrived above it
       wrap.classList.remove('thinking');
       wrap.classList.add('is-streaming');
-      while (wrap.firstChild) {
-        wrap.removeChild(wrap.firstChild);
+      const placeholder = wrap.querySelector('.thinking-body') as HTMLElement | null;
+      if (placeholder && placeholder.parentNode) {
+        placeholder.parentNode.removeChild(placeholder);
       }
-      wrap.appendChild(el('div', 'ai-body'));
+      if (!wrap.querySelector('.ai-body')) {
+        wrap.appendChild(el('div', 'ai-body'));
+      }
     }
     this.scheduleStreamRender(last);
+  }
+
+  private appendReasoning(chunk: string): void {
+    const last = this.messages[this.messages.length - 1];
+    if (!last || last.role !== 'assistant') {
+      return;
+    }
+    last.reasoning = (last.reasoning || '') + chunk;
+    const wrap = this.threadInner.querySelector('[data-id="' + last.id + '"]') as HTMLElement | null;
+    if (!wrap) {
+      return;
+    }
+    let box = wrap.querySelector('.reasoning') as HTMLElement | null;
+    if (!box) {
+      box = el('div', 'reasoning');
+      const head = el('div', 'reasoning-head', '思考过程');
+      const body = el('div', 'reasoning-body');
+      box.appendChild(head);
+      box.appendChild(body);
+      const target = box;
+      this.on(head, 'click', () => {
+        if (target.classList.contains('is-open')) {
+          target.classList.remove('is-open');
+        } else {
+          target.classList.add('is-open');
+        }
+      });
+      wrap.insertBefore(box, wrap.firstChild);
+    }
+    const body = box.querySelector('.reasoning-body') as HTMLElement | null;
+    if (body) {
+      body.textContent = last.reasoning;
+    }
+    this.scrollToBottom(false);
   }
 
   private scheduleStreamRender(msg: Message): void {
@@ -691,6 +794,16 @@ export class App {
         const body = node.querySelector('.ai-body') as HTMLElement | null;
         if (body) {
           body.innerHTML = renderMarkdown(last.content || (ok ? '' : '（已停止）'));
+        }
+        const rbox = node.querySelector('.reasoning') as HTMLElement | null;
+        if (rbox) {
+          rbox.classList.remove('is-open');
+          rbox.classList.add('is-done');
+          const head = rbox.querySelector('.reasoning-head') as HTMLElement | null;
+          const chars = (last.reasoning || '').length;
+          if (head && chars) {
+            head.textContent = '思考过程 · ' + chars + ' 字（点按展开）';
+          }
         }
       }
       if (!last.content) {

@@ -1,7 +1,7 @@
 # build outputs
 build/
-dist/*.ipa
-dist/*.app/
+dist/
+
 # local toolchain (LLVM / iOS SDK), never committed
 .toolchain/
 # local WSL distro + helper caches

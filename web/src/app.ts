@@ -47,6 +47,15 @@ function uid(): string {
   return 'm' + Date.now().toString(36) + Math.random().toString(36).slice(2, 7);
 }
 
+function scrubToolLeak(text: string): string {
+  let out = text;
+  out = out.replace(/<\/?tool_call[^>]*>/gi, '');
+  out = out.replace(/<\/?function_call[^>]*>/gi, '');
+  out = out.replace(/\{\s*"query"\s*:\s*"[^"]*"\s*\}/g, '');
+  out = out.replace(/\{\s*"search_query"\s*:\s*"[^"]*"\s*\}/g, '');
+  return out;
+}
+
 function formatBytes(bytes: number): string {
   if (!bytes) {
     return '图片';
@@ -763,15 +772,19 @@ export class App {
 
   private refreshSendState(): void {
     const has = this.input.value.trim().length > 0 || !!this.attach;
-    if (has && !this.streaming) {
-      this.sendBtn.removeAttribute('disabled');
-    } else if (!this.streaming) {
-      this.sendBtn.setAttribute('disabled', '');
-    }
     if (this.streaming) {
+      // the stop button has to stay tappable even with an empty composer
+      this.sendBtn.removeAttribute('disabled');
       this.sendBtn.classList.add('is-stop');
+      this.sendBtn.setAttribute('aria-label', '停止生成');
+      return;
+    }
+    this.sendBtn.classList.remove('is-stop');
+    this.sendBtn.setAttribute('aria-label', '发送');
+    if (has) {
+      this.sendBtn.removeAttribute('disabled');
     } else {
-      this.sendBtn.classList.remove('is-stop');
+      this.sendBtn.setAttribute('disabled', '');
     }
   }
 
@@ -855,7 +868,7 @@ export class App {
     if (!last || last.role !== 'assistant') {
       return;
     }
-    last.content += chunk;
+    last.content = scrubToolLeak(last.content + chunk);
     const wrap = this.threadInner.querySelector('[data-id="' + last.id + '"]') as HTMLElement | null;
     if (wrap && wrap.classList.contains('thinking')) {
       // first token: swap the "正在思考…" placeholder for the real reply body,

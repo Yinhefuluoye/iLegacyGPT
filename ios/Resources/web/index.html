@@ -1701,6 +1701,14 @@ svg { display: block; }
   function uid() {
     return "m" + Date.now().toString(36) + Math.random().toString(36).slice(2, 7);
   }
+  function scrubToolLeak(text) {
+    let out = text;
+    out = out.replace(/<\/?tool_call[^>]*>/gi, "");
+    out = out.replace(/<\/?function_call[^>]*>/gi, "");
+    out = out.replace(/\{\s*"query"\s*:\s*"[^"]*"\s*\}/g, "");
+    out = out.replace(/\{\s*"search_query"\s*:\s*"[^"]*"\s*\}/g, "");
+    return out;
+  }
   function formatBytes(bytes) {
     if (!bytes) {
       return "\u56FE\u7247";
@@ -2325,15 +2333,18 @@ svg { display: block; }
     }
     refreshSendState() {
       const has = this.input.value.trim().length > 0 || !!this.attach;
-      if (has && !this.streaming) {
-        this.sendBtn.removeAttribute("disabled");
-      } else if (!this.streaming) {
-        this.sendBtn.setAttribute("disabled", "");
-      }
       if (this.streaming) {
+        this.sendBtn.removeAttribute("disabled");
         this.sendBtn.classList.add("is-stop");
+        this.sendBtn.setAttribute("aria-label", "\u505C\u6B62\u751F\u6210");
+        return;
+      }
+      this.sendBtn.classList.remove("is-stop");
+      this.sendBtn.setAttribute("aria-label", "\u53D1\u9001");
+      if (has) {
+        this.sendBtn.removeAttribute("disabled");
       } else {
-        this.sendBtn.classList.remove("is-stop");
+        this.sendBtn.setAttribute("disabled", "");
       }
     }
     enterChat() {
@@ -2404,7 +2415,7 @@ svg { display: block; }
       if (!last || last.role !== "assistant") {
         return;
       }
-      last.content += chunk;
+      last.content = scrubToolLeak(last.content + chunk);
       const wrap = this.threadInner.querySelector('[data-id="' + last.id + '"]');
       if (wrap && wrap.classList.contains("thinking")) {
         wrap.classList.remove("thinking");

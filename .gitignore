@@ -11,3 +11,6 @@ web/node_modules/
 *.log
 .DS_Store
 Thumbs.db
+# headless chrome scratch used by UI prototype screenshots
+web/prototypes/.chrome-profile/
+web/prototypes/.chrome-log.txt

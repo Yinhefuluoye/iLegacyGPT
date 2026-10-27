@@ -11,7 +11,7 @@
 
 No account, no login, no telemetry — it talks to any OpenAI-compatible endpoint, and your API key never leaves your own device.
 
-`v1.0.0` · Objective-C + TypeScript · MIT
+`v1.1.0` · Objective-C + TypeScript · MIT
 
 </div>
 
@@ -38,8 +38,10 @@ It **ships no API and no keys**. You point it at your own OpenAI-compatible serv
 ## Features
 
 - **Any OpenAI-compatible API** — configurable provider, base URL, port and key; model list fetched live;
-- **Reasoning levels** — off / low / medium / high, sent as `reasoning_effort` or custom key-value pairs;
+- **Reasoning levels** — off / low / medium / high, sent as `reasoning_effort`, `enable_thinking` or custom key-value pairs;
+- **Web search** — off / auto / force; in auto mode the model itself decides through real function calling (`web_search`), results come back as numbered sources with clickable links;
 - **Streaming output and visible reasoning** — reasoning appears first, expandable, then the answer streams in;
+- **Markdown** — tables (alignment, wide-table scrolling), task lists, nested lists, code blocks, links;
 - **Session archive** — left drawer grouped by Today / Last 7 days / Earlier, swipe to rename or delete;
 - **Image input** — pick from the photo library; history keeps a 320 px thumbnail;
 - **Local-only data** — sessions, settings and keys live in the app sandbox; deleting the app deletes everything;
@@ -50,7 +52,8 @@ It **ships no API and no keys**. You point it at your own OpenAI-compatible serv
 | | Status |
 | --- | --- |
 | iPad 4 (iPad3,4, A6X, armv7) | ✅ tested on iOS 10.3.4 |
-| Other 32-bit iOS 8–10 devices | ⚠️ untested, should work |
+| Other armv7 devices on **iOS 10** (iPhone 5 / 5c) | ⚠️ untested, should work |
+| armv7 devices capped at **iOS 8 / 9** (iPad 2 / 3, iPhone 4S, iPod touch 5) | ❌ won't run: the UI bundle is ES2015 and the CSS uses custom properties, both need iOS 10 |
 | 64-bit devices | ❌ this build is armv7 only |
 | Jailbreak tweaks | not required (AppSync + unsigned IPA is enough) |
 
@@ -58,7 +61,7 @@ It **ships no API and no keys**. You point it at your own OpenAI-compatible serv
 
 > Requires **AppSync Unified** or a self-signing tool — the IPA is unsigned.
 
-1. Download `iLegacyGPT-1.0.0.ipa` from [Releases](../../releases);
+1. Download `iLegacyGPT-1.1.0.ipa` from [Releases](../../releases);
 2. Install with i4Tools / ipatool / any self-signing tool;
 3. Open the app → settings (top right) → fill in **provider, base URL, port, API key**, then refresh the model list.
 
@@ -85,11 +88,11 @@ See [PRIVACY.md](PRIVACY.md) (Chinese).
 **Toolchain**: WSL (Ubuntu 22.04) + Theos + iPhoneOS 10.3 SDK + Swift toolchain — see [docs/build-wsl.md](docs/build-wsl.md) (Chinese).
 
 ```bash
-VERSION=1.0.0 bash tools/build_local.sh
-python tools/package_ipa.py --app ios/.theos/obj/iphone/8.0/ChatAI.app --version 1.0.0 --name iLegacyGPT
+VERSION=1.1.0 bash tools/build_local.sh
+python tools/package_ipa.py --app ios/.theos/obj/iphone/8.0/ChatAI.app --version 1.1.0 --name iLegacyGPT
 ```
 
-Output: `dist/iLegacyGPT-1.0.0.ipa` (~100 KB).
+Output: `dist/iLegacyGPT-1.1.0.ipa` (~100 KB).
 
 There is **no CI**: releases are built locally in about five seconds.
 

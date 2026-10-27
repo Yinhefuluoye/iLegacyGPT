@@ -75,6 +75,88 @@
   border-top: 1px solid rgba(0, 0, 0, 0.09);
 }
 
+/* markdown tables: fill the bubble, wide ones scroll sideways */
+.ai-body .table-wrap {
+  margin: 0 0 13px;
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+}
+
+.ai-body .table-wrap:last-child {
+  margin-bottom: 0;
+}
+
+.ai-body table {
+  border-collapse: collapse;
+  border-spacing: 0;
+  min-width: 100%;
+  font-size: 14px;
+  line-height: 1.5;
+}
+
+.ai-body th,
+.ai-body td {
+  padding: 7px 10px;
+  border: 1px solid rgba(0, 0, 0, 0.1);
+  text-align: left;
+  vertical-align: top;
+  word-break: break-word;
+}
+
+/* four or more columns read as a comparison matrix: keep columns on one line */
+.ai-body .table-wrap.is-wide th,
+.ai-body .table-wrap.is-wide td {
+  white-space: nowrap;
+}
+
+.ai-body th {
+  background: rgba(0, 0, 0, 0.045);
+  font-weight: 600;
+}
+
+.ai-body tbody tr:nth-child(even) td {
+  background: rgba(0, 0, 0, 0.018);
+}
+
+/* strikethrough + inline code that is also a link */
+.ai-body del {
+  color: rgba(24, 26, 22, 0.48);
+}
+
+.ai-body code a {
+  color: inherit;
+  border-bottom: 1px dotted rgba(0, 0, 0, 0.28);
+}
+
+/* task list boxes (pure CSS: iOS 10 renders native checkboxes badly) */
+.ai-body .task-box {
+  position: relative;
+  display: inline-block;
+  width: 14px;
+  height: 14px;
+  margin-right: 7px;
+  border: 1px solid rgba(0, 0, 0, 0.3);
+  border-radius: 3px;
+  vertical-align: -2px;
+}
+
+.ai-body .task-box.is-done {
+  background: #8a5f28;
+  border-color: #8a5f28;
+}
+
+.ai-body .task-box.is-done::after {
+  content: '';
+  position: absolute;
+  left: 4px;
+  top: 1px;
+  width: 4px;
+  height: 8px;
+  border: solid #fff;
+  border-width: 0 2px 2px 0;
+  transform: rotate(45deg);
+}
+
 /* error + retry */
 .msg-error {
   margin: 0 0 10px;

@@ -934,6 +934,88 @@ svg { display: block; }
   border-top: 1px solid rgba(0, 0, 0, 0.09);
 }
 
+/* markdown tables: fill the bubble, wide ones scroll sideways */
+.ai-body .table-wrap {
+  margin: 0 0 13px;
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+}
+
+.ai-body .table-wrap:last-child {
+  margin-bottom: 0;
+}
+
+.ai-body table {
+  border-collapse: collapse;
+  border-spacing: 0;
+  min-width: 100%;
+  font-size: 14px;
+  line-height: 1.5;
+}
+
+.ai-body th,
+.ai-body td {
+  padding: 7px 10px;
+  border: 1px solid rgba(0, 0, 0, 0.1);
+  text-align: left;
+  vertical-align: top;
+  word-break: break-word;
+}
+
+/* four or more columns read as a comparison matrix: keep columns on one line */
+.ai-body .table-wrap.is-wide th,
+.ai-body .table-wrap.is-wide td {
+  white-space: nowrap;
+}
+
+.ai-body th {
+  background: rgba(0, 0, 0, 0.045);
+  font-weight: 600;
+}
+
+.ai-body tbody tr:nth-child(even) td {
+  background: rgba(0, 0, 0, 0.018);
+}
+
+/* strikethrough + inline code that is also a link */
+.ai-body del {
+  color: rgba(24, 26, 22, 0.48);
+}
+
+.ai-body code a {
+  color: inherit;
+  border-bottom: 1px dotted rgba(0, 0, 0, 0.28);
+}
+
+/* task list boxes (pure CSS: iOS 10 renders native checkboxes badly) */
+.ai-body .task-box {
+  position: relative;
+  display: inline-block;
+  width: 14px;
+  height: 14px;
+  margin-right: 7px;
+  border: 1px solid rgba(0, 0, 0, 0.3);
+  border-radius: 3px;
+  vertical-align: -2px;
+}
+
+.ai-body .task-box.is-done {
+  background: #8a5f28;
+  border-color: #8a5f28;
+}
+
+.ai-body .task-box.is-done::after {
+  content: '';
+  position: absolute;
+  left: 4px;
+  top: 1px;
+  width: 4px;
+  height: 8px;
+  border: solid #fff;
+  border-width: 0 2px 2px 0;
+  transform: rotate(45deg);
+}
+
 /* error + retry */
 .msg-error {
   margin: 0 0 10px;
@@ -1569,20 +1651,126 @@ svg { display: block; }
   function esc(text) {
     return text.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
   }
-  function inline(text) {
-    let s = esc(text);
-    const codes = [];
-    s = s.replace(/`([^`]+)`/g, function(_m, code) {
-      codes.push("<code>" + code + "</code>");
-      return "\0" + (codes.length - 1) + "\0";
-    });
-    s = s.replace(/\*\*([^*]+)\*\*/g, "<strong>$1</strong>");
+  function emph(text) {
+    let s = text;
+    s = s.replace(/\*\*([^*\n]+)\*\*/g, "<strong>$1</strong>");
+    s = s.replace(/~~([^~\n]+)~~/g, "<del>$1</del>");
     s = s.replace(/(^|[^*])\*([^*\n]+)\*/g, "$1<em>$2</em>");
-    s = s.replace(/\[([^\]]+)\]\((https?:[^)\s]+)\)/g, '<a href="$2" target="_blank">$1</a>');
-    s = s.replace(/\u0000(\d+)\u0000/g, function(_m, idx) {
-      return codes[parseInt(idx, 10)];
-    });
     return s;
+  }
+  var TOKEN = "\0";
+  function codeSpan(value) {
+    const trimmed = value.trim();
+    if (/^https?:\/\/\S+$/.test(trimmed)) {
+      return '<code><a href="' + trimmed + '" target="_blank">' + value + "</a></code>";
+    }
+    return "<code>" + value + "</code>";
+  }
+  function inline(text) {
+    const tokens = [];
+    function stash(html) {
+      tokens.push(html);
+      return TOKEN + (tokens.length - 1) + TOKEN;
+    }
+    let s = esc(text);
+    s = s.replace(/`([^`]+)`/g, function(_m, code) {
+      return stash(codeSpan(code));
+    });
+    s = s.replace(/!\[([^\]\n]*)\]\((https?:[^)\s]+)\)/g, function(_m, alt, url) {
+      return stash('<a href="' + url + '" target="_blank">[' + (alt || "\u56FE\u7247") + "]</a>");
+    });
+    s = s.replace(/\[([^\]\n]+)\]\((https?:[^)\s]+)\)/g, function(_m, label, url) {
+      return stash('<a href="' + url + '" target="_blank">' + emph(label) + "</a>");
+    });
+    s = emph(s);
+    s = s.replace(
+      /(?:https?:\/\/|www\.)[^\s<>"'\u3000\u3001\u3002\uff0c\uff1b\uff1a\uff01\uff1f\uff08\uff09]+/g,
+      function(raw) {
+        let url = raw;
+        const tail = [];
+        while (/[.,;:!?'"]$/.test(url)) {
+          tail.unshift(url.slice(-1));
+          url = url.slice(0, -1);
+        }
+        while (url.charAt(url.length - 1) === ")" && url.split("(").length - 1 < url.split(")").length - 1) {
+          tail.unshift(")");
+          url = url.slice(0, -1);
+        }
+        if (!url) {
+          return raw;
+        }
+        let href = url;
+        if (/^www\./i.test(href)) {
+          href = "http://" + href;
+        }
+        return '<a href="' + href + '" target="_blank">' + url + "</a>" + tail.join("");
+      }
+    );
+    return s.replace(/\u0000(\d+)\u0000/g, function(_m, idx) {
+      return tokens[parseInt(idx, 10)];
+    });
+  }
+  var CELL_PIPE = "";
+  function splitRow(line) {
+    let s = String(line == null ? "" : line).trim();
+    if (s.charAt(0) === "|") {
+      s = s.slice(1);
+    }
+    if (s.charAt(s.length - 1) === "|") {
+      s = s.slice(0, -1);
+    }
+    s = s.split("\\|").join(CELL_PIPE);
+    const cells = s.split("|");
+    for (let i = 0; i < cells.length; i++) {
+      cells[i] = cells[i].split(CELL_PIPE).join("|").trim();
+    }
+    return cells;
+  }
+  function isTableSeparator(line) {
+    if (!line || line.indexOf("-") < 0) {
+      return false;
+    }
+    const cells = splitRow(line);
+    if (!cells.length) {
+      return false;
+    }
+    for (let i = 0; i < cells.length; i++) {
+      if (!/^:?-{1,}:?$/.test(cells[i])) {
+        return false;
+      }
+    }
+    return true;
+  }
+  function tableAlign(cell) {
+    if (/^:.*:$/.test(cell)) {
+      return "center";
+    }
+    if (/^:/.test(cell)) {
+      return "left";
+    }
+    if (/:$/.test(cell)) {
+      return "right";
+    }
+    return "";
+  }
+  function listMark(line) {
+    const bullet = /^([ \t]*)[-*+]\s+(.*)$/.exec(line);
+    if (bullet) {
+      return { indent: bullet[1].length, ordered: false, num: 0, text: bullet[2] };
+    }
+    const ordered = /^([ \t]*)(\d+)[.)]\s+(.*)$/.exec(line);
+    if (ordered) {
+      return { indent: ordered[1].length, ordered: true, num: parseInt(ordered[2], 10), text: ordered[3] };
+    }
+    return null;
+  }
+  function listItemHtml(text) {
+    const task = /^\[([ xX])\]\s+(.*)$/.exec(text);
+    if (task) {
+      const done = task[1].toLowerCase() === "x";
+      return '<span class="task-box' + (done ? " is-done" : "") + '"></span>' + inline(task[2]);
+    }
+    return inline(text);
   }
   function renderMarkdown(src) {
     const lines = String(src == null ? "" : src).replace(/\r\n?/g, "\n").split("\n");
@@ -1596,7 +1784,47 @@ svg { display: block; }
       }
     }
     function startsBlock(line) {
-      return /^```/.test(line) || /^#{1,6}\s+/.test(line) || /^\s*[-*+]\s+/.test(line) || /^\s*\d+[.)]\s+/.test(line) || /^\s*>\s?/.test(line) || /^\s*(---|\*\*\*|___)\s*$/.test(line);
+      return /^```/.test(line) || /^#{1,6}\s+/.test(line) || /^[ \t]*[-*+]\s+/.test(line) || /^[ \t]*\d+[.)]\s+/.test(line) || /^[ \t]*>\s?/.test(line) || /^[ \t]*(---|\*\*\*|___)\s*$/.test(line);
+    }
+    function renderList(cursor, baseIndent, depth) {
+      const first = listMark(lines[cursor.i]);
+      if (!first) {
+        return "";
+      }
+      const ordered = first.ordered;
+      const startNumber = first.num;
+      const items = [];
+      while (cursor.i < lines.length) {
+        const mark = listMark(lines[cursor.i]);
+        if (!mark || mark.indent !== baseIndent || mark.ordered !== ordered) {
+          break;
+        }
+        cursor.i++;
+        let text = mark.text;
+        while (cursor.i < lines.length && lines[cursor.i].trim() && !listMark(lines[cursor.i]) && !startsBlock(lines[cursor.i])) {
+          text += " " + lines[cursor.i].trim();
+          cursor.i++;
+        }
+        let nested = "";
+        const next = cursor.i < lines.length ? listMark(lines[cursor.i]) : null;
+        if (next && next.indent > baseIndent && depth < 1) {
+          nested = renderList(cursor, next.indent, depth + 1);
+        }
+        items.push("<li>" + listItemHtml(text) + nested + "</li>");
+        if (cursor.i < lines.length && !lines[cursor.i].trim()) {
+          let j = cursor.i;
+          while (j < lines.length && !lines[j].trim()) {
+            j++;
+          }
+          const after = j < lines.length ? listMark(lines[j]) : null;
+          if (after && after.indent === baseIndent && after.ordered === ordered) {
+            cursor.i = j;
+          }
+        }
+      }
+      const tag = ordered ? "ol" : "ul";
+      const start = ordered && startNumber > 1 ? ' start="' + startNumber + '"' : "";
+      return "<" + tag + start + ">" + items.join("") + "</" + tag + ">";
     }
     while (i < lines.length) {
       const line = lines[i];
@@ -1621,41 +1849,65 @@ svg { display: block; }
         i++;
         continue;
       }
-      if (/^\s*(---|\*\*\*|___)\s*$/.test(line)) {
+      if (/^[ \t]*(---|\*\*\*|___)\s*$/.test(line)) {
         flushPara();
         out.push("<hr>");
         i++;
         continue;
       }
-      if (/^\s*>\s?/.test(line)) {
+      if (/^[ \t]*>\s?/.test(line)) {
         flushPara();
         const buf = [];
-        while (i < lines.length && /^\s*>\s?/.test(lines[i])) {
-          buf.push(lines[i].replace(/^\s*>\s?/, ""));
+        while (i < lines.length && /^[ \t]*>\s?/.test(lines[i])) {
+          buf.push(lines[i].replace(/^[ \t]*>\s?/, ""));
           i++;
         }
         out.push("<blockquote>" + inline(buf.join("\n")).replace(/\n/g, "<br>") + "</blockquote>");
         continue;
       }
-      const bullet = /^\s*[-*+]\s+/;
-      const ordered = /^\s*\d+[.)]\s+/;
-      if (bullet.test(line) || ordered.test(line)) {
+      if (line.indexOf("|") >= 0 && i + 1 < lines.length && isTableSeparator(lines[i + 1])) {
         flushPara();
-        const isOrdered = ordered.test(line);
-        const re = isOrdered ? ordered : bullet;
-        const items = [];
-        while (i < lines.length && re.test(lines[i])) {
-          items.push(lines[i].replace(re, ""));
-          i++;
-          while (i < lines.length && lines[i].trim() && !startsBlock(lines[i])) {
-            items[items.length - 1] += " " + lines[i].trim();
-            i++;
+        const header = splitRow(line);
+        const aligns = splitRow(lines[i + 1]).map(tableAlign);
+        i += 2;
+        const rows = [];
+        while (i < lines.length) {
+          const row = lines[i];
+          if (!row.trim() || row.indexOf("|") < 0 || isTableSeparator(row)) {
+            break;
           }
+          rows.push(splitRow(row));
+          i++;
         }
-        const tag = isOrdered ? "ol" : "ul";
-        out.push("<" + tag + ">" + items.map(function(t) {
-          return "<li>" + inline(t) + "</li>";
-        }).join("") + "</" + tag + ">");
+        const wide = header.length >= 4 ? " is-wide" : "";
+        let html = '<div class="table-wrap' + wide + '"><table><thead><tr>';
+        for (let c = 0; c < header.length; c++) {
+          const style = aligns[c] ? ' style="text-align:' + aligns[c] + '"' : "";
+          html += "<th" + style + ">" + inline(header[c]) + "</th>";
+        }
+        html += "</tr></thead>";
+        if (rows.length) {
+          html += "<tbody>";
+          for (let r = 0; r < rows.length; r++) {
+            html += "<tr>";
+            for (let c = 0; c < header.length; c++) {
+              const style = aligns[c] ? ' style="text-align:' + aligns[c] + '"' : "";
+              html += "<td" + style + ">" + inline(rows[r][c] || "") + "</td>";
+            }
+            html += "</tr>";
+          }
+          html += "</tbody>";
+        }
+        html += "</table></div>";
+        out.push(html);
+        continue;
+      }
+      const mark = listMark(line);
+      if (mark) {
+        flushPara();
+        const cursor = { i };
+        out.push(renderList(cursor, mark.indent, 0));
+        i = cursor.i;
         continue;
       }
       if (!line.trim()) {
@@ -2117,9 +2369,26 @@ svg { display: block; }
       const mode = this.config.thinking && this.config.thinking.mode;
       return typeof mode === "string" && mode ? mode : "auto";
     }
+    // Turning thinking OFF has to be explicit: qwen-style gateways default to
+    // "thinking on", so sending no parameter keeps reasoning enabled no matter
+    // what the chip says.
+    thinkingOffPayload() {
+      const mode = this.thinkingMode();
+      const model = String(this.config.model || "");
+      const base = String(this.config.baseUrl || "");
+      const qwenFamily = /qwen|qwq|qianwen|dashscope|aliyun|bailian/i.test(base) || /qwen|qwq/i.test(model);
+      if (mode === "enable_thinking" || mode === "thinking_budget" || qwenFamily) {
+        return { enable_thinking: false };
+      }
+      return null;
+    }
     thinkingPayload() {
       const level = Number(this.config.thinking.level) || 0;
       if (level <= 0) {
+        const off = this.thinkingOffPayload();
+        if (off) {
+          return { enabled: true, level: 0, params: off };
+        }
         return { enabled: false, level: 0, params: {} };
       }
       const mode = this.thinkingMode();

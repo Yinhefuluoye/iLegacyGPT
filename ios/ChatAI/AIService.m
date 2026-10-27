@@ -75,11 +75,19 @@ static NSArray *CandidateURLs(NSString *base, NSString *suffix) {
     return candidates;
 }
 
-static id ConvertScalarValue(NSString *value) {
+// Thinking parameters come from the web bridge as already-typed JSON: booleans
+// and numbers arrive as NSNumber (`enable_thinking: false`, `thinking_budget:
+// 4096`), so they must be passed through verbatim. Strings keep the legacy
+// textual form ("true" / "4096" / ...). Dropping NSNumber here silently
+// disabled every non-string thinking parameter.
+static id ConvertScalarValue(id value) {
+    if ([value isKindOfClass:[NSNumber class]]) {
+        return value;
+    }
     if (![value isKindOfClass:[NSString class]]) {
         return nil;
     }
-    NSString *trim = Trimmed(value);
+    NSString *trim = Trimmed((NSString *)value);
     if (trim.length == 0) {
         return nil;
     }
@@ -99,6 +107,29 @@ static id ConvertScalarValue(NSString *value) {
         return @(number);
     }
     return trim;
+}
+
+// Give the model a clock. Without it "today" is guessed — often wrongly — and
+// search queries then carry the wrong date.
+static NSString *ClockContextString(void) {
+    NSDate *now = [NSDate date];
+    NSTimeZone *zone = [NSTimeZone localTimeZone];
+
+    NSDateFormatter *iso = [[NSDateFormatter alloc] init];
+    iso.locale = [NSLocale localeWithLocaleIdentifier:@"en_US_POSIX"];
+    iso.timeZone = zone;
+    iso.dateFormat = @"yyyy-MM-dd'T'HH:mm:ssXXX";
+
+    NSDateFormatter *local = [[NSDateFormatter alloc] init];
+    local.locale = [NSLocale localeWithLocaleIdentifier:@"zh_CN"];
+    local.timeZone = zone;
+    local.dateFormat = @"yyyy年M月d日 EEEE HH:mm";
+
+    return [NSString stringWithFormat:
+        @"【当前时间】%@（%@；%@）。"
+        @"凡是涉及「今天」「现在」「最新」「今年」「最近」这类相对时间的问题，都以这个时间为准；"
+        @"需要联网检索时，请把具体日期或年份写进查询词，不要凭空猜测日期，也不要让用户自己核对今天几号。",
+        [iso stringFromDate:now], zone.name, [local stringFromDate:now]];
 }
 
 static NSString *ErrorTextFromBody(NSData *body, NSInteger statusCode) {
@@ -158,15 +189,16 @@ static NSArray *WebSearchTools(void) {
                          @"software versions or anything happening recently. Call this whenever the answer "
                          @"depends on fresh facts. Prefer queries that surface concrete article pages "
                          @"(news posts, documentation, blog entries, release notes) rather than homepages "
-                         @"or section index pages. Return one short, specific query; results come back "
-                         @"as numbered web pages you must cite as [1], [2] in your answer." copy],
+                         @"or section index pages. Return 1-2 short, specific queries, most specific "
+                         @"first; results come back as numbered web pages you must cite as [1], [2] "
+                         @"in your answer." copy],
         @"parameters": @{
             @"type": @"object",
             @"properties": @{
                 @"queries": @{
                     @"type": @"array",
                     @"items": @{ @"type": @"string" },
-                    @"description": @"One short, specific keyword query (only the first entry is used)."
+                    @"description": @"One or two short, specific keyword queries, most specific first."
                 }
             },
             @"required": @[ @"queries" ]
@@ -224,20 +256,28 @@ static NSArray *QueriesFromToolCalls(NSArray *calls) {
         if (![parsed isKindOfClass:[NSDictionary class]]) {
             continue;
         }
-        id queries = parsed[@"queries"];
-        if ([queries isKindOfClass:[NSArray class]]) {
-            for (id query in queries) {
-                if ([query isKindOfClass:[NSString class]]) {
-                    NSString *trim = Trimmed(query);
-                    if (trim.length) {
-                        [out addObject:trim];
+        // Accept the documented `queries` array first, then the singular aliases
+        // models fall back to when they improvise the argument object.
+        NSArray *keys = @[ @"queries", @"query", @"q", @"search_query", @"keywords" ];
+        for (NSString *key in keys) {
+            id value = parsed[key];
+            if ([value isKindOfClass:[NSArray class]]) {
+                for (id query in value) {
+                    if ([query isKindOfClass:[NSString class]]) {
+                        NSString *trim = Trimmed(query);
+                        if (trim.length) {
+                            [out addObject:trim];
+                        }
                     }
                 }
+            } else if ([value isKindOfClass:[NSString class]]) {
+                NSString *trim = Trimmed(value);
+                if (trim.length) {
+                    [out addObject:trim];
+                }
             }
-        } else if ([queries isKindOfClass:[NSString class]]) {
-            NSString *trim = Trimmed(queries);
-            if (trim.length) {
-                [out addObject:trim];
+            if (out.count) {
+                break;
             }
         }
     }
@@ -453,6 +493,11 @@ static NSArray *QueriesFromToolCalls(NSArray *calls) {
         }
     }
 
+    NSString *clock = ClockContextString();
+    if (clock.length) {
+        [chatMessages insertObject:[@{ @"role": @"system", @"content": clock } mutableCopy] atIndex:0];
+    }
+
     NSMutableDictionary *body = [NSMutableDictionary dictionary];
     body[@"model"] = model.length ? model : @"gpt-4o-mini";
     body[@"messages"] = chatMessages;
@@ -605,8 +650,11 @@ static NSArray *QueriesFromToolCalls(NSArray *calls) {
     // UI would stop streaming while the answer round has not started yet.
     NSArray *queries = QueriesFromToolCalls(state.toolCalls);
     AIToolCallBlock toolHandler = self.toolCallHandler;
-    if (queries.count > 0 && toolHandler && !state.stopped) {
-        NSLog(@"[ChatAI] tool_calls queries=%@", queries);
+    if (state.toolCalls.count > 0 && toolHandler && !state.stopped) {
+        // queries may be empty when the model improvised an unknown argument
+        // shape; the caller falls back to the user's own words.
+        NSLog(@"[ChatAI] tool_calls count=%lu queries=%@",
+              (unsigned long)state.toolCalls.count, queries);
         if (toolHandler(queries)) {
             return;
         }

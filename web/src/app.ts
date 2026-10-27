@@ -533,9 +533,27 @@ export class App {
     return typeof mode === 'string' && mode ? mode : 'auto';
   }
 
+  // Turning thinking OFF has to be explicit: qwen-style gateways default to
+  // "thinking on", so sending no parameter keeps reasoning enabled no matter
+  // what the chip says.
+  private thinkingOffPayload(): any {
+    const mode = this.thinkingMode();
+    const model = String(this.config.model || '');
+    const base = String(this.config.baseUrl || '');
+    const qwenFamily = /qwen|qwq|qianwen|dashscope|aliyun|bailian/i.test(base) || /qwen|qwq/i.test(model);
+    if (mode === 'enable_thinking' || mode === 'thinking_budget' || qwenFamily) {
+      return { enable_thinking: false };
+    }
+    return null;
+  }
+
   private thinkingPayload(): any {
     const level = Number(this.config.thinking.level) || 0;
     if (level <= 0) {
+      const off = this.thinkingOffPayload();
+      if (off) {
+        return { enabled: true, level: 0, params: off };
+      }
       return { enabled: false, level: 0, params: {} };
     }
     const mode = this.thinkingMode();

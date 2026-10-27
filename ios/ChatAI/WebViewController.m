@@ -593,6 +593,48 @@ static id SearchValueAtPath(id object, NSString *path) {
     return [content isKindOfClass:[NSString class]] ? content : nil;
 }
 
+// Runs several search queries one after another and merges their context, so a
+// model that sends two queries (often the topic plus the date) gets both.
+- (void)runQueries:(NSArray *)queries
+             index:(NSUInteger)index
+            merged:(NSMutableString *)merged
+            config:(NSDictionary *)cfg
+         requestId:(NSString *)requestId
+        completion:(void (^)(NSString *context))completion {
+    if (index >= queries.count) {
+        completion(merged.length ? [merged copy] : nil);
+        return;
+    }
+    id item = queries[index];
+    NSString *query = [item isKindOfClass:[NSString class]] ? item : @"";
+    if (query.length == 0) {
+        [self runQueries:queries index:index + 1 merged:merged config:cfg
+                requestId:requestId completion:completion];
+        return;
+    }
+    __weak WebViewController *weakSelf = self;
+    [self runSearchForQuery:query config:cfg requestId:requestId
+                 completion:^(NSString *context, NSArray *items) {
+        (void)items;
+        WebViewController *strongSelf = weakSelf;
+        if (!strongSelf) {
+            return;
+        }
+        NSString *rid = requestId ?: @"";
+        if (rid.length && [strongSelf.cancelledRequestId isEqualToString:rid]) {
+            return;
+        }
+        if (context.length) {
+            if (merged.length) {
+                [merged appendString:@"\n\n"];
+            }
+            [merged appendString:context];
+        }
+        [strongSelf runQueries:queries index:index + 1 merged:merged config:cfg
+                    requestId:requestId completion:completion];
+    }];
+}
+
 // Chat entry point.
 //   off   -> plain request, no tools
 //   force -> always search first, then answer once with the results injected
@@ -662,18 +704,43 @@ static id SearchValueAtPath(id object, NSString *path) {
         }];
     };
 
-    // The model asked for the web: search, then let the caller issue the
-    // follow-up request. Returning YES keeps this round from emitting `done`.
+    // The model asked for the web: search (up to two queries, merged), then let
+// the caller issue the follow-up request. Returning YES keeps this round from
+// emitting `done`.
     AIToolCallBlock toolHandler = ^BOOL(NSArray *queries) {
         WebViewController *strongSelf = weakSelf;
         if (!strongSelf) {
             return NO;
         }
-        NSString *toolQuery = queries.count ? queries[0] : @"";
-        if (toolQuery.length == 0) {
+        NSMutableArray *run = [NSMutableArray array];
+        for (id item in queries) {
+            if ([item isKindOfClass:[NSString class]]) {
+                NSString *text = [(NSString *)item stringByTrimmingCharactersInSet:
+                                  [NSCharacterSet whitespaceAndNewlineCharacterSet]];
+                if (text.length) {
+                    [run addObject:text];
+                    if (run.count >= 2) {
+                        break;
+                    }
+                }
+            }
+        }
+        if (run.count == 0 && question.length) {
+            // the model improvised an argument object the parser does not know
+            [run addObject:question];
+        }
+        if (run.count == 0) {
             return NO;
         }
-        searchThenAnswer(toolQuery);
+        [strongSelf sendToWeb:@{ @"type": @"searching", @"requestId": rid }];
+        [strongSelf runQueries:run
+                         index:0
+                        merged:[NSMutableString string]
+                        config:config
+                     requestId:requestId
+                    completion:^(NSString *context) {
+            answerWith(context.length ? context : SearchFailureNote());
+        }];
         return YES;
     };
 

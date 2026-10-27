@@ -580,13 +580,6 @@ export class App {
   /* ------------------------------------------------------------- images -- */
 
   private pickImage(): void {
-    if (!this.bridge.native) {
-      const input = $('fileInput') as HTMLInputElement;
-      if (input) {
-        input.click();
-      }
-      return;
-    }
     this.bridge.post('image.pick', { source: 'library' });
   }
 
@@ -602,7 +595,11 @@ export class App {
       bytes: Number(img.bytes) || 0
     };
     this.attachThumb.src = 'data:' + this.attach.mime + ';base64,' + this.attach.dataBase64;
-    this.attachName.textContent = formatBytes(this.attach.bytes || 0);
+    const w = Number(img.width) || 0;
+    const h = Number(img.height) || 0;
+    this.attachName.textContent = w && h ? w + ' × ' + h : formatBytes(this.attach.bytes || 0);
+    // the attach row is only rendered when the composer carries `has-attach`
+    this.composer.classList.add('has-attach');
     this.attachRow.classList.add('is-open');
     this.composer.classList.add('is-stacked');
     this.refreshSendState();
@@ -610,6 +607,7 @@ export class App {
 
   private clearAttach(): void {
     this.attach = null;
+    this.composer.classList.remove('has-attach');
     this.attachRow.classList.remove('is-open');
     this.composer.classList.remove('is-stacked');
     this.attachThumb.removeAttribute('src');

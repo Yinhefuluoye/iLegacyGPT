@@ -119,12 +119,6 @@ export class Bridge {
       }, 200);
       return;
     }
-    if (op === 'image.pick') {
-      setTimeout(function () {
-        self.receive({ type: 'cancel', requestId: payload.requestId || '' });
-      }, 50);
-      return;
-    }
     if (op === 'chat.stop') {
       if (this.mockTimer) {
         window.clearInterval(this.mockTimer);
@@ -161,6 +155,38 @@ export class Bridge {
           self.receive({ type: 'done', requestId: rid, usage: null });
         }
       }, 40);
+      return;
+    }
+    if (op === 'image.pick') {
+      // desktop preview: generate a small sample picture instead of a picker
+      const canvas = document.createElement('canvas');
+      canvas.width = 640;
+      canvas.height = 400;
+      const ctx = canvas.getContext('2d');
+      if (ctx) {
+        ctx.fillStyle = '#f6f6f2';
+        ctx.fillRect(0, 0, 640, 400);
+        ctx.strokeStyle = '#3a2a1a';
+        ctx.lineWidth = 16;
+        ctx.beginPath();
+        ctx.ellipse(320, 200, 150, 100, 0, 0, Math.PI * 2);
+        ctx.stroke();
+        ctx.fillStyle = '#3a2a1a';
+        ctx.beginPath();
+        ctx.ellipse(320, 200, 22, 70, 0, 0, Math.PI * 2);
+        ctx.fill();
+      }
+      const url = canvas.toDataURL('image/jpeg', 0.8);
+      self.receive({
+        type: 'image',
+        requestId: payload.requestId || '',
+        image: {
+          mime: 'image/jpeg',
+          dataBase64: url.split(',')[1] || '',
+          width: 640,
+          height: 400
+        }
+      });
       return;
     }
     if (op === 'log.write') {

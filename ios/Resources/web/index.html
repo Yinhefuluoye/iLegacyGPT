@@ -1016,6 +1016,19 @@ svg { display: block; }
     padding-bottom: 12px;
   }
 }
+
+/* image sent by the user: give it a little frame so it reads as a picture */
+.msg.user .bubble-img {
+  max-width: 240px;
+  max-height: 220px;
+  border: 1px solid rgba(0, 0, 0, 0.07);
+  border-radius: 16px;
+  background: #fff;
+}
+
+.msg.user .bubble-img:last-child {
+  margin-bottom: 0;
+}
 </style>
 </head>
 <body>
@@ -1328,12 +1341,6 @@ svg { display: block; }
         }, 200);
         return;
       }
-      if (op === "image.pick") {
-        setTimeout(function() {
-          self.receive({ type: "cancel", requestId: payload.requestId || "" });
-        }, 50);
-        return;
-      }
       if (op === "chat.stop") {
         if (this.mockTimer) {
           window.clearInterval(this.mockTimer);
@@ -1370,6 +1377,37 @@ svg { display: block; }
             self.receive({ type: "done", requestId: rid, usage: null });
           }
         }, 40);
+        return;
+      }
+      if (op === "image.pick") {
+        const canvas = document.createElement("canvas");
+        canvas.width = 640;
+        canvas.height = 400;
+        const ctx = canvas.getContext("2d");
+        if (ctx) {
+          ctx.fillStyle = "#f6f6f2";
+          ctx.fillRect(0, 0, 640, 400);
+          ctx.strokeStyle = "#3a2a1a";
+          ctx.lineWidth = 16;
+          ctx.beginPath();
+          ctx.ellipse(320, 200, 150, 100, 0, 0, Math.PI * 2);
+          ctx.stroke();
+          ctx.fillStyle = "#3a2a1a";
+          ctx.beginPath();
+          ctx.ellipse(320, 200, 22, 70, 0, 0, Math.PI * 2);
+          ctx.fill();
+        }
+        const url = canvas.toDataURL("image/jpeg", 0.8);
+        self.receive({
+          type: "image",
+          requestId: payload.requestId || "",
+          image: {
+            mime: "image/jpeg",
+            dataBase64: url.split(",")[1] || "",
+            width: 640,
+            height: 400
+          }
+        });
         return;
       }
       if (op === "log.write") {
@@ -2034,13 +2072,6 @@ svg { display: block; }
     }
     /* ------------------------------------------------------------- images -- */
     pickImage() {
-      if (!this.bridge.native) {
-        const input = $("fileInput");
-        if (input) {
-          input.click();
-        }
-        return;
-      }
       this.bridge.post("image.pick", { source: "library" });
     }
     receiveImage(m) {
@@ -2054,13 +2085,17 @@ svg { display: block; }
         bytes: Number(img.bytes) || 0
       };
       this.attachThumb.src = "data:" + this.attach.mime + ";base64," + this.attach.dataBase64;
-      this.attachName.textContent = formatBytes(this.attach.bytes || 0);
+      const w = Number(img.width) || 0;
+      const h = Number(img.height) || 0;
+      this.attachName.textContent = w && h ? w + " \xD7 " + h : formatBytes(this.attach.bytes || 0);
+      this.composer.classList.add("has-attach");
       this.attachRow.classList.add("is-open");
       this.composer.classList.add("is-stacked");
       this.refreshSendState();
     }
     clearAttach() {
       this.attach = null;
+      this.composer.classList.remove("has-attach");
       this.attachRow.classList.remove("is-open");
       this.composer.classList.remove("is-stacked");
       this.attachThumb.removeAttribute("src");

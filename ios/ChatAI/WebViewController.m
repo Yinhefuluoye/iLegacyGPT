@@ -501,6 +501,86 @@ static id SearchValueAtPath(id object, NSString *path) {
     return out;
 }
 
+// Ask the model (cheap, non-streaming) whether this turn needs a web search.
+// Output contract: {"query":"..."} or {"query":""}. Falls back to "no search"
+// when the endpoint or model does not cooperate, so the chat never blocks.
+- (void)decideSearchQueryFor:(NSString *)question
+                      config:(NSDictionary *)cfg
+                  completion:(void (^)(NSString *query))completion {
+    NSString *base = [ChatConfig normalizedBaseURL:cfg];
+    NSString *urlString = [base hasSuffix:@"/chat/completions"] ? base
+        : [base stringByAppendingString:@"/chat/completions"];
+    NSString *key = [ChatConfig apiKeyFromConfig:cfg];
+    NSString *model = [ChatConfig modelFromConfig:cfg];
+    NSURL *url = [NSURL URLWithString:urlString];
+    if (!url || question.length == 0) {
+        completion(nil);
+        return;
+    }
+    NSString *system = @"You are a search planner. Decide if answering the user needs fresh web information "
+                        "(news, prices, weather, specific facts you are unsure about). "
+                        "Reply with strict JSON only: {\"query\":\"search keywords\"} when needed, "
+                        "or {\"query\":\"\"} when the question can be answered without the web.";
+    NSDictionary *body = @{
+        @"model": model.length ? model : @"gpt-4o-mini",
+        @"messages": @[ @{ @"role": @"system", @"content": system },
+                        @{ @"role": @"user", @"content": question } ],
+        @"stream": @NO,
+        @"max_tokens": @100,
+        @"temperature": @0
+    };
+    NSData *bodyData = [NSJSONSerialization dataWithJSONObject:body options:0 error:NULL];
+    NSMutableURLRequest *request = [NSMutableURLRequest requestWithURL:url];
+    request.HTTPMethod = @"POST";
+    request.timeoutInterval = 20.0;
+    [request setValue:@"application/json" forHTTPHeaderField:@"Content-Type"];
+    if (key.length) {
+        [request setValue:[@"Bearer " stringByAppendingString:key] forHTTPHeaderField:@"Authorization"];
+    }
+    request.HTTPBody = bodyData;
+    NSURLSessionDataTask *task = [[NSURLSession sharedSession] dataTaskWithRequest:request
+        completionHandler:^(NSData *data, NSURLResponse *response, NSError *error) {
+        NSString *picked = nil;
+        if (!error && data.length) {
+            id json = [NSJSONSerialization JSONObjectWithData:data options:0 error:NULL];
+            NSString *content = [self valueAtChatContent:json];
+            if (content.length) {
+                NSRange start = [content rangeOfString:@"{"];
+                NSRange end = [content rangeOfString:@"}" options:NSBackwardsSearch];
+                if (start.location != NSNotFound && end.location != NSNotFound && end.location >= start.location) {
+                    NSString *snippet = [content substringWithRange:
+                        NSMakeRange(start.location, end.location - start.location + 1)];
+                    NSData *snippetData = [snippet dataUsingEncoding:NSUTF8StringEncoding];
+                    id parsed = [NSJSONSerialization JSONObjectWithData:snippetData options:0 error:NULL];
+                    if ([parsed isKindOfClass:[NSDictionary class]]) {
+                        id q = parsed[@"query"];
+                        if ([q isKindOfClass:[NSString class]]) {
+                            picked = [q stringByTrimmingCharactersInSet:[NSCharacterSet whitespaceAndNewlineCharacterSet]];
+                        }
+                    }
+                }
+            }
+        }
+        dispatch_async(dispatch_get_main_queue(), ^{
+            completion(picked.length ? picked : nil);
+        });
+    }];
+    [task resume];
+}
+
+- (NSString *)valueAtChatContent:(id)json {
+    if (![json isKindOfClass:[NSDictionary class]]) {
+        return nil;
+    }
+    id choices = json[@"choices"];
+    if (![choices isKindOfClass:[NSArray class]] || [choices count] == 0) {
+        return nil;
+    }
+    id message = choices[0][@"message"];
+    id content = message[@"content"];
+    return [content isKindOfClass:[NSString class]] ? content : nil;
+}
+
 // Same contract as AIService -startChatWithConfig:..., but runs the optional
 // web search first so AIService stays a pure chat-completions client.
 - (NSString *)startChatWithSearch:(NSDictionary *)config
@@ -512,19 +592,12 @@ static id SearchValueAtPath(id object, NSString *path) {
                       onReasoning:(AIDeltaBlock)onReasoning
                            onDone:(AIDoneBlock)onDone
                           onError:(AIErrorBlock)onError {
-    NSDictionary *searchCfg = config[@"search"];
-    BOOL wantsSearch = [searchCfg isKindOfClass:[NSDictionary class]] && [searchCfg[@"enabled"] boolValue];
+    NSDictionary *searchCfg = [config[@"search"] isKindOfClass:[NSDictionary class]] ? config[@"search"] : @{};
+    NSString *mode = [searchCfg[@"mode"] isKindOfClass:[NSString class]] ? searchCfg[@"mode"] : @"off";
     NSString *query = [self searchLastUserText:messages];
-    if (!wantsSearch || query.length == 0) {
-        return [self.ai startChatWithConfig:config requestId:requestId messages:messages
-                                      image:image thinking:thinking
-                                    onDelta:onDelta onReasoning:onReasoning
-                                     onDone:onDone onError:onError];
-    }
     __weak typeof(self) weakSelf = self;
-    [self runSearchForQuery:query config:config requestId:requestId
-                 completion:^(NSString *context, NSArray *items) {
-        (void)items;
+
+    void (^answerWith)(NSString *context) = ^(NSString *context) {
         if (weakSelf == nil) {
             return;
         }
@@ -535,6 +608,35 @@ static id SearchValueAtPath(id object, NSString *path) {
                                    image:image thinking:thinking
                                  onDelta:onDelta onReasoning:onReasoning
                                   onDone:onDone onError:onError];
+    };
+    void (^searchThenAnswer)(NSString *searchQuery) = ^(NSString *searchQuery) {
+        if (weakSelf == nil) {
+            return;
+        }
+        [weakSelf runSearchForQuery:searchQuery config:config requestId:requestId
+                         completion:^(NSString *context, NSArray *items) {
+            (void)items;
+            answerWith(context);
+        }];
+    };
+
+    if ([mode isEqualToString:@"off"] || query.length == 0) {
+        return [self.ai startChatWithConfig:config requestId:requestId messages:messages
+                                      image:image thinking:thinking
+                                    onDelta:onDelta onReasoning:onReasoning
+                                     onDone:onDone onError:onError];
+    }
+    if ([mode isEqualToString:@"force"]) {
+        searchThenAnswer(query);
+        return requestId;
+    }
+    // auto: let the model decide whether this question needs a search, and what to search for
+    [self decideSearchQueryFor:query config:config completion:^(NSString *decided) {
+        if (decided.length) {
+            searchThenAnswer(decided);
+        } else {
+            answerWith(nil);
+        }
     }];
     return requestId;
 }

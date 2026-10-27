@@ -193,3 +193,11 @@
 .source-item { font-size: 13px; line-height: 1.6; margin-bottom: 4px; color: #5b605a; }
 .source-link { color: #8a5f28; text-decoration: none; }
 .source-host { margin-left: 6px; font-size: 11px; color: rgba(27, 29, 26, 0.36); }
+
+/* forced search: stronger fill than auto */
+.search-chip.is-force {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: #fff;
+}
+.search-chip.is-force .think-dot { background: #fff; opacity: 1; }

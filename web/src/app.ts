@@ -82,6 +82,7 @@ export class App {
   private attach: { dataBase64: string; mime: string; bytes?: number; thumb?: string } | null = null;
   private modelsOpenAfter = false;
   private saveTimer = 0;
+  private ignoreNextConfig = false;
   private renderTimer = 0;
   private cleanups: Array<() => void> = [];
 
@@ -330,7 +331,16 @@ export class App {
     this.bridge.on('image', (m: Msg) => this.receiveImage(m));
     this.bridge.on('models', (m: Msg) => this.receiveModels(m));
     this.bridge.on('config', (m: Msg) => {
+      const echo = this.ignoreNextConfig;
+      this.ignoreNextConfig = false;
       this.config = this.normalizeConfig(m.config || this.config);
+      if (echo) {
+        // our own write bounced back: only refresh the chips, keep the form untouched
+        this.updateSearchChip();
+        this.updateThinkChip();
+        this.modelChipName.textContent = this.config.model || '模型';
+        return;
+      }
       this.applyConfig();
     });
     this.bridge.on('ok', (m: Msg) => {
@@ -352,7 +362,7 @@ export class App {
       models: Array.isArray(cfg.models) ? cfg.models.slice() : [],
       fontSize: Number(cfg.fontSize) || 16,
       search: {
-        enabled: !!(cfg.search && cfg.search.enabled),
+        mode: (cfg.search && cfg.search.mode) || ((cfg.search && cfg.search.enabled) ? 'force' : 'off'),
         url: (cfg.search && cfg.search.url) || '',
         key: (cfg.search && cfg.search.key) || '',
         header: (cfg.search && cfg.search.header) || 'Authorization',
@@ -393,26 +403,35 @@ export class App {
     this.updateSearchChip();
   }
 
+  private searchMode(): string {
+    return (this.config.search && this.config.search.mode) || 'off';
+  }
+
   private updateSearchChip(): void {
     const chip = $('searchChip');
     const label = $('searchLabel');
-    const on = !!(this.config.search && this.config.search.enabled);
-    chip.setAttribute('aria-pressed', on ? 'true' : 'false');
-    if (on) {
+    const mode = this.searchMode();
+    chip.classList.remove('is-on', 'is-force');
+    if (mode === 'auto') {
       chip.classList.add('is-on');
-      label.textContent = '联网 · 开';
+      label.textContent = '联网 · 自动';
+    } else if (mode === 'force') {
+      chip.classList.add('is-on', 'is-force');
+      label.textContent = '联网 · 强制';
     } else {
-      chip.classList.remove('is-on');
       label.textContent = '联网';
     }
+    chip.setAttribute('aria-pressed', mode === 'off' ? 'false' : 'true');
   }
 
   private toggleSearch(): void {
     if (!this.config.search) {
-      return;
+      this.config.search = { url: '', key: '', header: 'Authorization', prefix: 'Bearer ' };
     }
-    this.config.search.enabled = !this.config.search.enabled;
-    if (this.config.search.enabled && !this.config.search.url) {
+    const mode = this.searchMode();
+    const next = mode === 'off' ? 'auto' : (mode === 'auto' ? 'force' : 'off');
+    this.config.search.mode = next;
+    if (next !== 'off' && !this.config.search.url) {
       this.toast('先在设置里填联网搜索 API 地址');
     }
     this.updateSearchChip();
@@ -464,7 +483,15 @@ export class App {
   }
 
   private saveConfig(): void {
-    this.bridge.post('config.set', { config: this.config });
+    if (this.saveTimer) {
+      window.clearTimeout(this.saveTimer);
+    }
+    this.ignoreNextConfig = true;
+    const self = this;
+    this.saveTimer = window.setTimeout(function () {
+      self.saveTimer = 0;
+      self.bridge.post('config.set', { config: self.config });
+    }, 400);
   }
 
   private changeFont(delta: number): void {
@@ -794,7 +821,7 @@ export class App {
       messages: this.historyForApi(),
       image: image,
       thinking: thinking,
-      search: { enabled: !!(this.config.search && this.config.search.enabled) }
+      search: { mode: this.searchMode() }
     });
   }
 

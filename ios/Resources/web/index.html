@@ -1053,6 +1053,14 @@ svg { display: block; }
 .source-link { color: #8a5f28; text-decoration: none; }
 .source-host { margin-left: 6px; font-size: 11px; color: rgba(27, 29, 26, 0.36); }
 
+/* forced search: stronger fill than auto */
+.search-chip.is-force {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: #fff;
+}
+.search-chip.is-force .think-dot { background: #fff; opacity: 1; }
+
 </style>
 </head>
 <body>
@@ -1700,6 +1708,7 @@ svg { display: block; }
       this.attach = null;
       this.modelsOpenAfter = false;
       this.saveTimer = 0;
+      this.ignoreNextConfig = false;
       this.renderTimer = 0;
       this.cleanups = [];
       this.toastTimer = 0;
@@ -1904,7 +1913,15 @@ svg { display: block; }
       this.bridge.on("image", (m) => this.receiveImage(m));
       this.bridge.on("models", (m) => this.receiveModels(m));
       this.bridge.on("config", (m) => {
+        const echo = this.ignoreNextConfig;
+        this.ignoreNextConfig = false;
         this.config = this.normalizeConfig(m.config || this.config);
+        if (echo) {
+          this.updateSearchChip();
+          this.updateThinkChip();
+          this.modelChipName.textContent = this.config.model || "\u6A21\u578B";
+          return;
+        }
         this.applyConfig();
       });
       this.bridge.on("ok", (m) => {
@@ -1924,7 +1941,7 @@ svg { display: block; }
         models: Array.isArray(cfg.models) ? cfg.models.slice() : [],
         fontSize: Number(cfg.fontSize) || 16,
         search: {
-          enabled: !!(cfg.search && cfg.search.enabled),
+          mode: cfg.search && cfg.search.mode || (cfg.search && cfg.search.enabled ? "force" : "off"),
           url: cfg.search && cfg.search.url || "",
           key: cfg.search && cfg.search.key || "",
           header: cfg.search && cfg.search.header || "Authorization",
@@ -1963,25 +1980,33 @@ svg { display: block; }
       $("searchNum").value = String(search.num || 5);
       this.updateSearchChip();
     }
+    searchMode() {
+      return this.config.search && this.config.search.mode || "off";
+    }
     updateSearchChip() {
       const chip = $("searchChip");
       const label = $("searchLabel");
-      const on = !!(this.config.search && this.config.search.enabled);
-      chip.setAttribute("aria-pressed", on ? "true" : "false");
-      if (on) {
+      const mode = this.searchMode();
+      chip.classList.remove("is-on", "is-force");
+      if (mode === "auto") {
         chip.classList.add("is-on");
-        label.textContent = "\u8054\u7F51 \xB7 \u5F00";
+        label.textContent = "\u8054\u7F51 \xB7 \u81EA\u52A8";
+      } else if (mode === "force") {
+        chip.classList.add("is-on", "is-force");
+        label.textContent = "\u8054\u7F51 \xB7 \u5F3A\u5236";
       } else {
-        chip.classList.remove("is-on");
         label.textContent = "\u8054\u7F51";
       }
+      chip.setAttribute("aria-pressed", mode === "off" ? "false" : "true");
     }
     toggleSearch() {
       if (!this.config.search) {
-        return;
+        this.config.search = { url: "", key: "", header: "Authorization", prefix: "Bearer " };
       }
-      this.config.search.enabled = !this.config.search.enabled;
-      if (this.config.search.enabled && !this.config.search.url) {
+      const mode = this.searchMode();
+      const next = mode === "off" ? "auto" : mode === "auto" ? "force" : "off";
+      this.config.search.mode = next;
+      if (next !== "off" && !this.config.search.url) {
         this.toast("\u5148\u5728\u8BBE\u7F6E\u91CC\u586B\u8054\u7F51\u641C\u7D22 API \u5730\u5740");
       }
       this.updateSearchChip();
@@ -2030,7 +2055,15 @@ svg { display: block; }
       return url ? "custom" : "deepseek";
     }
     saveConfig() {
-      this.bridge.post("config.set", { config: this.config });
+      if (this.saveTimer) {
+        window.clearTimeout(this.saveTimer);
+      }
+      this.ignoreNextConfig = true;
+      const self = this;
+      this.saveTimer = window.setTimeout(function() {
+        self.saveTimer = 0;
+        self.bridge.post("config.set", { config: self.config });
+      }, 400);
     }
     changeFont(delta) {
       const next = Math.min(22, Math.max(14, (Number(this.config.fontSize) || 16) + delta));
@@ -2323,7 +2356,7 @@ svg { display: block; }
         messages: this.historyForApi(),
         image,
         thinking,
-        search: { enabled: !!(this.config.search && this.config.search.enabled) }
+        search: { mode: this.searchMode() }
       });
     }
     stop() {

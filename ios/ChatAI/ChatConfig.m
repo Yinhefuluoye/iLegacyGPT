@@ -25,7 +25,8 @@ static NSString *const kChatConfigKey = @"chatai.config.v1";
             @"header": @"Authorization",
             @"prefix": @"Bearer ",
             @"body": @"{\"query\":\"{{query}}\",\"num_results\":{{num}}}",
-            @"num": @5
+            @"num": @5,
+            @"mode": @"off"
         }
     };
 }
@@ -64,7 +65,10 @@ static NSString *const kChatConfigKey = @"chatai.config.v1";
         }
     }];
     [[NSUserDefaults standardUserDefaults] setObject:cleaned forKey:kChatConfigKey];
-    [[NSUserDefaults standardUserDefaults] synchronize];
+    // flushing on the main thread stalls the UI on old devices; do it in the background
+    dispatch_async(dispatch_get_global_queue(DISPATCH_QUEUE_PRIORITY_DEFAULT, 0), ^{
+        [[NSUserDefaults standardUserDefaults] synchronize];
+    });
 }
 
 + (NSString *)normalizedBaseURL:(NSDictionary *)config {

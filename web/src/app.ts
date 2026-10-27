@@ -1057,7 +1057,7 @@ export class App {
       old.parentNode!.removeChild(old);
     }
     const box = el('div', 'sources');
-    box.appendChild(el('div', 'sources-head', '来源 · 点击用 Safari 打开'));
+    box.appendChild(el('div', 'sources-head', '来源'));
     const list = el('ol', 'sources-list');
     for (let i = 0; i < items.length; i++) {
       const item = items[i] || {};

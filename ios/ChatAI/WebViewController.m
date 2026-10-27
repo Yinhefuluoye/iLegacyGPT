@@ -523,7 +523,7 @@ static id SearchValueAtPath(id object, NSString *path) {
     NSString *system = @"You are a search planner. Decide if answering the user needs fresh web information "
                         "(news, prices, weather, specific facts you are unsure about). "
                         "Reply with strict JSON only: {\"query\":\"search keywords\"} when needed, "
-                        "or {\"query\":\"\"} when the question can be answered without the web.";
+                        "or {\"query\":\"\"} when the question can be answered without the web. Prefer queries that would surface concrete article pages (news posts, docs, blog entries) rather than homepages or section index pages.";
     NSDictionary *body = @{
         @"model": model.length ? model : @"gpt-4o-mini",
         @"messages": @[ @{ @"role": @"system", @"content": system },

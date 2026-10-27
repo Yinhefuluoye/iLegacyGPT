@@ -281,9 +281,11 @@ svg { display: block; }
 
 /* 输入区 */
 .composer-input {
-  flex: 1 1 auto;
+  /* flex-basis 0 + width auto: iOS 10 WebKit lays out `width:100%` flex items
+     wider than the row, which pushed the chips / send button past the pill. */
+  flex: 1 1 0%;
   min-width: 0;
-  width: 100%;
+  width: auto;
   height: 44px;
   min-height: 44px;
   max-height: 132px;

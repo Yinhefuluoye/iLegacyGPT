@@ -1,6 +1,9 @@
 # build outputs
 build/
 dist/
+# Theos build products (objects, staged app, caches)
+ios/.theos/
+*.Td
 
 # local toolchain (LLVM / iOS SDK), never committed
 .toolchain/

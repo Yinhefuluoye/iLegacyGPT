@@ -1,0 +1,62 @@
+name: build-ipa
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Cache Theos
+        uses: actions/cache@v4
+        with:
+          path: ${{ github.workspace }}/theos
+          key: theos-${{ runner.os }}-sdk10.3-v1
+
+      - name: Prepare Theos
+        uses: Randomblock1/theos-action@v1
+        with:
+          theos-dir: ${{ github.workspace }}/theos
+          theos-src: 'https://github.com/theos/theos'
+          theos-sdks: 'https://github.com/theos/sdks'
+          theos-sdks-branch: 'master'
+
+      - name: Show environment
+        run: |
+          echo "THEOS=$THEOS"
+          ls "$THEOS/sdks" || true
+          ls "$THEOS/toolchain/linux/iphone/bin" 2>/dev/null | head -n 20 || true
+
+      - name: Build app
+        run: |
+          cd ios
+          make FINALPACKAGE=1 2>&1 | tail -n 120
+
+      - name: Locate app bundle
+        run: |
+          APP="$(find ios/.theos -type d -name 'ChatAI.app' | head -n 1)"
+          echo "APP=$APP"
+          test -n "$APP"
+          test -d "$APP"
+          echo "APP_PATH=$APP" >> "$GITHUB_ENV"
+
+      - name: Package IPA
+        run: |
+          python3 tools/package_ipa.py \
+            --app "$APP_PATH" \
+            --out dist \
+            --version "0.1.${{ github.run_number }}" \
+            --bundle-version "${{ github.run_number }}"
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ChatAI-ipa-${{ github.run_number }}
+          path: dist/*.ipa
+          if-no-files-found: error

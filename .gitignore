@@ -1,0 +1,13 @@
+# build outputs
+build/
+dist/*.ipa
+dist/*.app/
+# local toolchain (LLVM / iOS SDK), never committed
+.toolchain/
+# web build outputs generated from TS
+web/dist/
+web/node_modules/
+# misc
+*.log
+.DS_Store
+Thumbs.db

@@ -558,7 +558,11 @@ export class App {
     } else if (!this.streaming) {
       this.sendBtn.setAttribute('disabled', '');
     }
-    this.sendBtn.classList.toggle('is-stop', this.streaming);
+    if (this.streaming) {
+      this.sendBtn.classList.add('is-stop');
+    } else {
+      this.sendBtn.classList.remove('is-stop');
+    }
   }
 
   private enterChat(): void {
@@ -1007,7 +1011,11 @@ export class App {
     for (let i = 0; i < rows.length; i++) {
       const row = rows[i] as HTMLElement;
       const rowId = row.getAttribute('data-id') || '';
-      row.classList.toggle('is-open', !!id && rowId === id);
+      if (!!id && rowId === id) {
+        row.classList.add('is-open');
+      } else {
+        row.classList.remove('is-open');
+      }
       const content = row.querySelector('.session-content') as HTMLElement | null;
       if (content) {
         content.style.transform = '';

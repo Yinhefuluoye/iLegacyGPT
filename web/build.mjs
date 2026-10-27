@@ -30,6 +30,25 @@ const css =
   readFileSync(join(root, 'src', 'styles.css'), 'utf8') +
   '\n/* ---- production ---- */\n' +
   readFileSync(join(root, 'src', 'extra.css'), 'utf8');
+
+// Guard rails: the target is iOS 10.3 WebKit (Safari 10.1). These features are
+// silently ignored there and usually break layout in subtle ways, so fail the
+// build instead of shipping them.
+const FORBIDDEN_CSS = [
+  [/(?:^|[;{\s])inset\s*:/, 'CSS `inset` shorthand'],
+  [/(?:^|[;{\s])gap\s*:/, 'flex/grid `gap`'],
+  [/:has\(/, ':has()'],
+  [/aspect-ratio\s*:/, 'aspect-ratio'],
+  [/\b(?:dvh|svh)\b/, 'dvh/svh units'],
+  [/backdrop-filter/, 'backdrop-filter'],
+  [/scroll-behavior\s*:\s*smooth/, 'scroll-behavior: smooth'],
+  [/position\s*:\s*sticky/, 'position: sticky']
+];
+for (const [re, why] of FORBIDDEN_CSS) {
+  if (re.test(css)) {
+    throw new Error('CSS uses ' + why + ', which iOS 10 WebKit does not support');
+  }
+}
 writeFileSync(join(dist, 'app.css'), css, 'utf8');
 
 // 3. single self-contained html shell (external CSS/JS do not survive the

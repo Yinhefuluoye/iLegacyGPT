@@ -114,7 +114,11 @@
 - 允许：CSS 变量、flex、`-webkit-` 前缀、ES2015、Promise、async/await、`fetch`。
 - 禁用：可选链 `?.`、空值合并 `??`、BigInt、`Array.flat`、`Object.fromEntries`、
   `String.replaceAll`、`Promise.finally/allSettled`、`AbortController`、flex `gap`、
-  `backdrop-filter` 实时模糊、`dvh/svh`、`aspect-ratio`、`:has`、`scroll-behavior:smooth`。
+  **CSS `inset` 简写**（用 `top/right/bottom/left`）、`classList.toggle` 的 force 参数、
+  `backdrop-filter` 实时模糊、`dvh/svh`、`aspect-ratio`、`:has`、`scroll-behavior:smooth`、
+  `position: sticky`。
+  > `web/build.mjs` 会在构建时扫描 CSS，命中以上特性直接报错（2026-10-28 加，起因：抽屉用了
+  > `inset:0`，iOS 10 上遮罩/抽屉高度塌成 0，整块 UI 挤在左上角）。
 - 输入框 `font-size` 不小于 16px（避免聚焦自动放大）；`textarea` 需要手动同步高度。
 - 滚动容器用 `-webkit-overflow-scrolling: touch`；单页 `overflow:hidden`，只让消息区滚。
 

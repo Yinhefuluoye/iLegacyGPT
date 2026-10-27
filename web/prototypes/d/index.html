@@ -739,13 +739,15 @@ svg { display: block; }
   .sheet { max-height: 92%; }
 }
 /* ---------- 会话抽屉 ---------- */
-.topbar-left { display: flex; align-items: center; gap: 4px; }
+.topbar-left { display: flex; align-items: center; }
+.topbar-left .wordmark { margin-left: 6px; }
 .menu-btn { margin-left: -8px; }
 
-.drawer-layer { position: fixed; inset: 0; z-index: 60; pointer-events: none; }
+/* 注意：iOS 10 不支持 CSS `inset` 简写和 flex `gap`，这里一律用老写法 */
+.drawer-layer { position: fixed; top: 0; right: 0; bottom: 0; left: 0; z-index: 60; pointer-events: none; }
 .drawer-layer.is-open { pointer-events: auto; }
 .drawer-scrim {
-  position: absolute; inset: 0;
+  position: absolute; top: 0; right: 0; bottom: 0; left: 0;
   background: rgba(24, 24, 20, 0.30);
   opacity: 0; transition: opacity 0.18s ease;
 }
@@ -791,10 +793,10 @@ svg { display: block; }
 }
 .session-act + .session-act { margin-left: 1px; }
 .session-act.is-danger { color: #b3261e; background: #fbecea; }
-.session-act:active { filter: brightness(0.95); }
+.session-act:active { -webkit-filter: brightness(0.95); filter: brightness(0.95); }
 .session-content {
   position: relative; z-index: 1;
-  display: flex; align-items: center; gap: 8px;
+  display: flex; align-items: center;
   width: 100%; margin: 0;
   padding: 11px 12px;
   border: 0; border-radius: 12px;
@@ -808,7 +810,7 @@ svg { display: block; }
 .session-row.is-active .session-content { background: rgba(185, 138, 75, 0.11); }
 .session-row.is-open .session-content { padding-right: 148px; }
 .session-title {
-  flex: 1 1 auto; min-width: 0;
+  flex: 1 1 auto; min-width: 0; margin-right: 8px;
   overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
   font-size: 15px;
 }
@@ -824,12 +826,12 @@ svg { display: block; }
 .drawer-foot { padding: 8px 4px 2px; border-top: 1px solid rgba(0, 0, 0, 0.06); }
 .drawer-hint { padding: 2px 12px 6px; font-size: 11px; color: rgba(27, 29, 26, 0.30); }
 .drawer-new {
-  display: flex; align-items: center; gap: 8px; width: 100%;
+  display: flex; align-items: center; width: 100%;
   padding: 11px 12px; border-radius: 12px; border: 0; background: none;
   font: inherit; font-size: 15px; color: #8a5f28;
 }
 .drawer-new:hover { background: rgba(185, 138, 75, 0.10); }
-.drawer-new-plus { font-size: 18px; line-height: 1; }
+.drawer-new-plus { font-size: 18px; line-height: 1; margin-right: 7px; }
 </style>
 </head>
 <body>

@@ -1566,6 +1566,7 @@ svg { display: block; }
       this.sessions = [];
       this.currentId = "";
       this.openRowId = "";
+      this.buildInfo = "";
       this.requestId = "";
       this.streaming = false;
       this.attach = null;
@@ -2759,17 +2760,19 @@ svg { display: block; }
     }
     openSettings() {
       this.applyConfig();
-      const note = document.querySelector("#settingsOverlay .sheet-note");
-      if (note) {
-        note.textContent = "\u914D\u7F6E\u4EC5\u4FDD\u5B58\u5728\u672C\u673A";
-      }
+      this.updateSettingsNote();
       this.openOverlay($("settingsOverlay"));
     }
     setBuildInfo(build) {
-      const foot = document.querySelector("#settingsOverlay .sheet-foot .foot-note");
-      if (foot) {
-        foot.textContent = "\u7248\u672C " + build + " \xB7 \u914D\u7F6E\u4EC5\u4FDD\u5B58\u5728\u672C\u673A";
+      this.buildInfo = build;
+      this.updateSettingsNote();
+    }
+    updateSettingsNote() {
+      const note = document.querySelector("#settingsOverlay .sheet-note");
+      if (!note) {
+        return;
       }
+      note.textContent = "\u7248\u672C " + (this.buildInfo || "unknown") + " \xB7 \u914D\u7F6E\u4EC5\u4FDD\u5B58\u5728\u672C\u673A";
     }
     toast(text) {
       this.toastEl.textContent = text;

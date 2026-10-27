@@ -79,12 +79,23 @@ static UIImage *ScaleImageToMaxSide(UIImage *image, CGFloat maxSide) {
 }
 
 - (UIStatusBarStyle)preferredStatusBarStyle {
-    return UIStatusBarStyleLightContent;
+    // The page is light: dark status bar text, otherwise white-on-white looks
+    // like a rendering glitch at the top of the screen.
+    return UIStatusBarStyleDefault;
 }
 
 - (void)viewDidLayoutSubviews {
     [super viewDidLayoutSubviews];
-    self.webView.frame = self.view.bounds;
+    // Keep the page below the status bar so the HTML top bar never collides
+    // with the system clock / battery row.
+    CGRect bounds = self.view.bounds;
+    CGFloat top = 0;
+    UIApplication *app = [UIApplication sharedApplication];
+    if (!app.statusBarHidden) {
+        top = app.statusBarFrame.size.height;
+    }
+    self.webView.frame = CGRectMake(bounds.origin.x, bounds.origin.y + top,
+                                    bounds.size.width, bounds.size.height - top);
 }
 
 #pragma mark - Bridge out

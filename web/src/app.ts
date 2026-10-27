@@ -76,6 +76,7 @@ export class App {
   private sessions: Session[] = [];
   private currentId = '';
   private openRowId = '';
+  private buildInfo = '';
   private requestId = '';
   private streaming = false;
   private attach: { dataBase64: string; mime: string; bytes?: number } | null = null;
@@ -1402,18 +1403,21 @@ export class App {
 
   private openSettings(): void {
     this.applyConfig();
-    const note = document.querySelector('#settingsOverlay .sheet-note') as HTMLElement | null;
-    if (note) {
-      note.textContent = '配置仅保存在本机';
-    }
+    this.updateSettingsNote();
     this.openOverlay($('settingsOverlay'));
   }
 
   private setBuildInfo(build: string): void {
-    const foot = document.querySelector('#settingsOverlay .sheet-foot .foot-note') as HTMLElement | null;
-    if (foot) {
-      foot.textContent = '版本 ' + build + ' · 配置仅保存在本机';
+    this.buildInfo = build;
+    this.updateSettingsNote();
+  }
+
+  private updateSettingsNote(): void {
+    const note = document.querySelector('#settingsOverlay .sheet-note') as HTMLElement | null;
+    if (!note) {
+      return;
     }
+    note.textContent = '版本 ' + (this.buildInfo || 'unknown') + ' · 配置仅保存在本机';
   }
 
   private toast(text: string): void {

@@ -2,21 +2,30 @@
 
 English | [简体中文](SECURITY.zh-CN.md)
 
-## Reporting
+## 1. Reporting
 
-- Ordinary bugs and feature requests: open an [issue](../../issues);
-- Security problems (a leaked key, arbitrary code execution, sandbox escape, …): please **do not** open a public issue. Use GitHub's private vulnerability report (Security → Report a vulnerability), or contact the author directly first.
+1.1 Functional defects and feature requests: open an issue in the repository.
 
-## Please keep these out of public threads
+1.2 Security defects, including key disclosure, arbitrary code execution and sandbox escape: use the private vulnerability report under Security in the repository, or contact the maintainer directly. Do not open a public issue for these.
 
-- your **API key**, `Authorization` headers, or a full base URL that carries a token;
-- screenshots of conversations that contain personal data;
-- device serial numbers or anything tied to your Apple ID.
+## 2. Information handling
 
-If you must attach a log to an issue, redact the key, the host name and the message content first.
+2.1 Do not publish API keys, `Authorization` headers, or base URLs that contain a token.
 
-## Known security boundaries
+2.2 Do not publish conversation screenshots that contain personal data.
 
-- the API key is stored **in plain text** inside the app sandbox (`Library/Application Support/ChatAI/`), with no extra encryption. That is the trade-off of a local single-user tool: on a jailbroken device any process running as root can read it;
-- the IPA is **unsigned**; installing it relies on AppSync or re-signing. Download it only from this repository's Releases, never from an unknown "repackaged" build;
-- this project ships no proxy and forwards nothing — your traffic goes straight to the endpoint you configured.
+2.3 Do not publish device serial numbers or Apple ID details.
+
+2.4 When a log is required for a report, redact the key, the host name and the message content before attaching it.
+
+## 3. Known boundaries
+
+3.1 The API key is stored unencrypted inside the application sandbox at `Library/Application Support/ChatAI/`. On a jailbroken device, any process with root privileges can read it.
+
+3.2 The IPA is unsigned. Installation requires AppSync Unified or a signing tool. Releases published by this repository are the only supported distribution; builds obtained elsewhere are unverified.
+
+3.3 The application performs no request forwarding and operates no proxy.
+
+## 4. Supported versions
+
+Security fixes are applied to the latest release only. Older releases do not receive backports.

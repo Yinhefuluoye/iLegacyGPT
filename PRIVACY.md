@@ -2,29 +2,34 @@
 
 English | [简体中文](PRIVACY.zh-CN.md)
 
-In one sentence: **this app collects nothing and has no server of its own.**
+## 1. Scope
 
-## What is stored, and where
+The application runs entirely on the device. It contains no server component, no account system and no analytics.
 
-| Data | Location | Notes |
+## 2. Data stored locally
+
+| Data | Location | Retention |
 | --- | --- | --- |
-| API key, provider, base URL, port, model name, font size, reasoning level | app sandbox `Library/Application Support/ChatAI/config` | device only, removed when the app is deleted |
-| Sessions and messages (including 320 px image thumbnails) | app sandbox `Library/Application Support/ChatAI/store.json` | device only; history is capped at the latest 120 entries per session and 200 messages |
-| Debug log | a log file inside the app sandbox | device only, used for troubleshooting |
+| API key, provider, base URL, port, model, font size, reasoning level, search settings | `Library/Application Support/ChatAI/config` | until the application is deleted |
+| Sessions and messages, including 320 px image thumbnails | `Library/Application Support/ChatAI/store.json` | history is capped per session |
+| Diagnostic log | log file in the application sandbox | until deleted by the user |
 
-## Requests it makes
+## 3. Network requests
 
-- A request is sent **only when you press send**, and only to the endpoint **you configured**;
-- Request content: the text you typed, the image you attached (downscaled so the long side is at most 1568 px), and the conversation history;
-- Destination: the base URL and port you entered. The author of this project is not involved and cannot see those requests.
+3.1 A request is issued only when the user submits a message.
 
-## What it does not do
+3.2 The destination is the endpoint configured by the user in Settings.
 
-- no account, no login;
-- no telemetry, no analytics, no crash reporting;
-- no access to contacts, location or the clipboard;
-- no upload to any third-party server, other than the endpoint you configured yourself.
+3.3 A request contains the message text, the conversation history, and the attached image when present. Images are downscaled so that the long side does not exceed 1568 px.
 
-## Keep in mind
+3.4 When web search is enabled, the search API configured by the user is called with the generated query.
 
-The provider you configure may log your requests according to its own privacy policy; that is outside this project. Do not send sensitive data through a gateway you do not trust.
+3.5 The project provides no proxy, relay or intermediary; requests are not routed through any infrastructure operated by the project.
+
+## 4. Third parties
+
+The operator of the configured endpoint, and the operator of the configured search API, may retain request data under their own policies. That processing is outside the control of this project.
+
+## 5. Changes
+
+This document is versioned with the repository; changes are visible in its history.

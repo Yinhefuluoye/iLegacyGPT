@@ -170,3 +170,26 @@
 .msg.user .bubble-img:last-child {
   margin-bottom: 0;
 }
+
+/* web search chip + sources */
+.search-chip.is-on {
+  background: var(--think-on-bg);
+  border-color: var(--think-on-border);
+  color: var(--think-on-fg);
+}
+.search-chip.is-on .think-dot { opacity: 1; background: var(--accent); }
+.sources {
+  margin-top: 14px;
+  padding-top: 12px;
+  border-top: 1px solid rgba(0, 0, 0, 0.06);
+}
+.sources-head {
+  font-size: 12px;
+  letter-spacing: 0.5px;
+  color: rgba(27, 29, 26, 0.42);
+  margin-bottom: 6px;
+}
+.sources-list { margin: 0; padding-left: 18px; }
+.source-item { font-size: 13px; line-height: 1.6; margin-bottom: 4px; color: #5b605a; }
+.source-link { color: #8a5f28; text-decoration: none; }
+.source-host { margin-left: 6px; font-size: 11px; color: rgba(27, 29, 26, 0.36); }

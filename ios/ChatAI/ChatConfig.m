@@ -18,7 +18,15 @@ static NSString *const kChatConfigKey = @"chatai.config.v1";
             @"onValue": @"high",
             @"offValue": @""
         },
-        @"fontSize": @17
+        @"fontSize": @17,
+        @"search": @{
+            @"url": @"",
+            @"key": @"",
+            @"header": @"Authorization",
+            @"prefix": @"Bearer ",
+            @"body": @"{\"query\":\"{{query}}\",\"num_results\":{{num}}}",
+            @"num": @5
+        }
     };
 }
 

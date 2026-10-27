@@ -79,6 +79,9 @@
               <button class="chip think-chip" id="thinkChip" type="button" aria-pressed="false" aria-label="思考档位">
                 <span class="think-dot"></span><span id="thinkLabel">思考</span>
               </button>
+              <button class="chip search-chip" id="searchChip" type="button" aria-pressed="false" aria-label="联网搜索">
+                <span class="think-dot"></span><span id="searchLabel">联网</span>
+              </button>
               <button class="send-btn" id="sendBtn" type="button" aria-label="发送" disabled>
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
                   <path d="M12 19V5"></path>
@@ -150,6 +153,37 @@
         </div>
       </div>
 
+      <div class="field">
+        <label class="field-label" for="searchUrl">联网搜索 API 地址</label>
+        <input class="field-input" id="searchUrl" type="text" placeholder="https://api.tavily.com/search">
+      </div>
+      <div class="field">
+        <label class="field-label" for="searchKey">搜索 API Key</label>
+        <input class="field-input" id="searchKey" type="password" placeholder="可选（不需鉴权时留空）">
+      </div>
+      <div class="field-row">
+        <div class="field field-grow">
+          <label class="field-label" for="searchHeader">鉴权 Header</label>
+          <input class="field-input" id="searchHeader" type="text" placeholder="Authorization">
+        </div>
+        <div class="field field-grow">
+          <label class="field-label" for="searchPrefix">前缀</label>
+          <input class="field-input" id="searchPrefix" type="text" placeholder="Bearer ">
+        </div>
+      </div>
+      <div class="field">
+        <label class="field-label" for="searchBody">请求体模板</label>
+        <input class="field-input" id="searchBody" type="text" placeholder='{"query":"{{query}}","num_results":{{num}}}'>
+        <p class="field-note">支持 {{query}} 与 {{num}}，默认 POST JSON</p>
+      </div>
+      <div class="field">
+        <label class="field-label" for="searchNum">结果条数</label>
+        <select id="searchNum">
+          <option value="3">3</option>
+          <option value="5">5</option>
+          <option value="8">8</option>
+        </select>
+      </div>
       <div class="field">
         <label class="field-label" for="providerSelect">API 提供商</label>
         <div class="select-shell">

@@ -205,7 +205,7 @@ static UIImage *ScaleImageToMaxSide(UIImage *image, CGFloat maxSide) {
         NSDictionary *image = [body[@"image"] isKindOfClass:[NSDictionary class]] ? body[@"image"] : nil;
         NSDictionary *thinking = [body[@"thinking"] isKindOfClass:[NSDictionary class]] ? body[@"thinking"] : nil;
         __weak typeof(self) weakSelf = self;
-        NSString *rid = [self.ai startChatWithConfig:cfg
+        NSString *rid = [self startChatWithSearch:cfg
                                           requestId:requestId
                                            messages:messages
                                               image:image
@@ -314,6 +314,229 @@ static UIImage *ScaleImageToMaxSide(UIImage *image, CGFloat maxSide) {
     self.keyboardOverlap = overlap;
     [self layoutWebView];
     [self sendToWeb:@{ @"type": @"keyboard", @"height": @(lroundf(overlap)) }];
+}
+
+#pragma mark - Web search
+
+static NSString *SearchJSONEscape(NSString *text) {
+    NSMutableString *out = [NSMutableString stringWithString:text ?: @""];
+    [out replaceOccurrencesOfString:@"\\" withString:@"\\\\" options:0 range:NSMakeRange(0, out.length)];
+    [out replaceOccurrencesOfString:@"\"" withString:@"\\\"" options:0 range:NSMakeRange(0, out.length)];
+    [out replaceOccurrencesOfString:@"\n" withString:@"\\n" options:0 range:NSMakeRange(0, out.length)];
+    [out replaceOccurrencesOfString:@"\r" withString:@"" options:0 range:NSMakeRange(0, out.length)];
+    [out replaceOccurrencesOfString:@"\t" withString:@" " options:0 range:NSMakeRange(0, out.length)];
+    return out;
+}
+
+static id SearchValueAtPath(id object, NSString *path) {
+    if (![path isKindOfClass:[NSString class]] || path.length == 0) {
+        return nil;
+    }
+    id current = object;
+    for (NSString *part in [path componentsSeparatedByString:@"."]) {
+        if (![current isKindOfClass:[NSDictionary class]]) {
+            return nil;
+        }
+        current = ((NSDictionary *)current)[part];
+        if (!current || [current isKindOfClass:[NSNull class]]) {
+            return nil;
+        }
+    }
+    return current;
+}
+
+- (NSString *)searchLastUserText:(NSArray *)messages {
+    for (NSInteger i = (NSInteger)messages.count - 1; i >= 0; i--) {
+        id item = messages[(NSUInteger)i];
+        if (![item isKindOfClass:[NSDictionary class]]) {
+            continue;
+        }
+        if ([item[@"role"] isEqualToString:@"user"]) {
+            id content = item[@"content"];
+            if ([content isKindOfClass:[NSString class]] && [content length]) {
+                return content;
+            }
+            if ([content isKindOfClass:[NSArray class]]) {
+                for (id part in content) {
+                    if ([part isKindOfClass:[NSDictionary class]] && [part[@"text"] isKindOfClass:[NSString class]]) {
+                        return part[@"text"];
+                    }
+                }
+            }
+        }
+    }
+    return nil;
+}
+
+- (NSArray *)searchResultsInJSON:(id)json {
+    NSArray *paths = @[@"results", @"data", @"items", @"organic", @"web.results", @"documents", @"hits"];
+    for (NSString *path in paths) {
+        id value = SearchValueAtPath(json, path);
+        if ([value isKindOfClass:[NSArray class]] && [value count]) {
+            return value;
+        }
+    }
+    return [json isKindOfClass:[NSArray class]] ? json : @[];
+}
+
+- (NSString *)searchStringInItem:(id)item keys:(NSArray *)keys {
+    if (![item isKindOfClass:[NSDictionary class]]) {
+        return nil;
+    }
+    for (NSString *key in keys) {
+        id value = ((NSDictionary *)item)[key];
+        if ([value isKindOfClass:[NSString class]] && [value length]) {
+            return value;
+        }
+    }
+    return nil;
+}
+
+- (NSInteger)searchNumber:(id)value fallback:(NSInteger)fallback {
+    if ([value respondsToSelector:@selector(integerValue)]) {
+        NSInteger number = [value integerValue];
+        if (number > 0) {
+            return MIN(number, 10);
+        }
+    }
+    return fallback;
+}
+
+- (void)runSearchForQuery:(NSString *)query
+                   config:(NSDictionary *)cfg
+                 requestId:(NSString *)requestId
+               completion:(void (^)(NSString *context, NSArray *items))completion {
+    NSDictionary *search = [cfg[@"search"] isKindOfClass:[NSDictionary class]] ? cfg[@"search"] : nil;
+    NSString *urlString = [search[@"url"] isKindOfClass:[NSString class]] ? search[@"url"] : @"";
+    NSString *key = [search[@"key"] isKindOfClass:[NSString class]] ? search[@"key"] : @"";
+    urlString = [urlString stringByTrimmingCharactersInSet:[NSCharacterSet whitespaceAndNewlineCharacterSet]];
+    if (urlString.length == 0 || query.length == 0) {
+        completion(nil, nil);
+        return;
+    }
+    NSURL *url = [NSURL URLWithString:urlString];
+    if (!url) {
+        completion(nil, nil);
+        return;
+    }
+    NSInteger num = [self searchNumber:search[@"num"] fallback:5];
+    NSString *template = [search[@"body"] isKindOfClass:[NSString class]] ? search[@"body"] : @"";
+    if (template.length == 0) {
+        template = @"{\"query\":\"{{query}}\",\"num_results\":{{num}}}";
+    }
+    NSString *bodyString = [template stringByReplacingOccurrencesOfString:@"{{query}}" withString:SearchJSONEscape(query)];
+    bodyString = [bodyString stringByReplacingOccurrencesOfString:@"{{num}}" withString:[NSString stringWithFormat:@"%ld", (long)num]];
+    bodyString = [bodyString stringByReplacingOccurrencesOfString:@"{{key}}" withString:SearchJSONEscape(key)];
+
+    NSMutableURLRequest *request = [NSMutableURLRequest requestWithURL:url];
+    request.HTTPMethod = @"POST";
+    request.timeoutInterval = 20.0;
+    [request setValue:@"application/json" forHTTPHeaderField:@"Content-Type"];
+    NSString *headerName = [search[@"header"] isKindOfClass:[NSString class]] ? search[@"header"] : @"Authorization";
+    NSString *prefix = [search[@"prefix"] isKindOfClass:[NSString class]] ? search[@"prefix"] : @"Bearer ";
+    if (headerName.length == 0) {
+        headerName = @"Authorization";
+    }
+    if (key.length) {
+        [request setValue:[prefix stringByAppendingString:key] forHTTPHeaderField:headerName];
+    }
+    request.HTTPBody = [bodyString dataUsingEncoding:NSUTF8StringEncoding];
+
+    __weak typeof(self) weakSelf = self;
+    NSURLSessionDataTask *task = [[NSURLSession sharedSession] dataTaskWithRequest:request
+        completionHandler:^(NSData *data, NSURLResponse *response, NSError *error) {
+        if (error || data.length == 0) {
+            dispatch_async(dispatch_get_main_queue(), ^{
+                completion(nil, nil);
+            });
+            return;
+        }
+        id json = [NSJSONSerialization JSONObjectWithData:data options:0 error:NULL];
+        NSArray *results = [weakSelf searchResultsInJSON:json];
+        NSMutableArray *items = [NSMutableArray array];
+        NSMutableString *context = [NSMutableString string];
+        NSInteger index = 0;
+        for (id result in results) {
+            if (index >= num) {
+                break;
+            }
+            NSString *title = [weakSelf searchStringInItem:result keys:@[@"title", @"name", @"headline"]];
+            NSString *link = [weakSelf searchStringInItem:result keys:@[@"url", @"link", @"href"]];
+            NSString *snippet = [weakSelf searchStringInItem:result
+                keys:@[@"text", @"content", @"snippet", @"description", @"summary"]];
+            if (snippet.length > 320) {
+                snippet = [[snippet substringToIndex:320] stringByAppendingString:@"…"];
+            }
+            if (!title.length && !snippet.length) {
+                continue;
+            }
+            index += 1;
+            [context appendFormat:@"[%ld] %@\n%@\n%@\n\n", (long)index,
+                title.length ? title : @"(无标题)", snippet.length ? snippet : @"", link.length ? link : @""];
+            [items addObject:@{ @"index": @(index),
+                                @"title": title.length ? title : @"(无标题)",
+                                @"url": link.length ? link : @"",
+                                @"snippet": snippet.length ? snippet : @"" }];
+        }
+        NSString *final = context.length
+            ? [NSString stringWithFormat:
+                @"以下是刚刚检索到的网络资料（共 %ld 条）。回答用户问题时请优先依据这些资料，"
+                @"并用 [1]、[2] 这样的编号标注来源；资料不足时如实说明，不要编造。\n\n%@",
+                (long)items.count, context]
+            : nil;
+        dispatch_async(dispatch_get_main_queue(), ^{
+            if (items.count) {
+                [weakSelf sendToWeb:@{ @"type": @"sources", @"requestId": requestId ?: @"", @"items": items }];
+            }
+            completion(final, items);
+        });
+    }];
+    [task resume];
+}
+
+- (NSArray *)searchMessagesByInjecting:(NSString *)context into:(NSArray *)messages {
+    NSMutableArray *out = [NSMutableArray arrayWithCapacity:messages.count + 1];
+    [out addObject:@{ @"role": @"system", @"content": context }];
+    [out addObjectsFromArray:messages ?: @[]];
+    return out;
+}
+
+// Same contract as AIService -startChatWithConfig:..., but runs the optional
+// web search first so AIService stays a pure chat-completions client.
+- (NSString *)startChatWithSearch:(NSDictionary *)config
+                        requestId:(NSString *)requestId
+                         messages:(NSArray *)messages
+                            image:(NSDictionary *)image
+                         thinking:(NSDictionary *)thinking
+                          onDelta:(AIDeltaBlock)onDelta
+                      onReasoning:(AIDeltaBlock)onReasoning
+                           onDone:(AIDoneBlock)onDone
+                          onError:(AIErrorBlock)onError {
+    NSDictionary *searchCfg = config[@"search"];
+    BOOL wantsSearch = [searchCfg isKindOfClass:[NSDictionary class]] && [searchCfg[@"enabled"] boolValue];
+    NSString *query = [self searchLastUserText:messages];
+    if (!wantsSearch || query.length == 0) {
+        return [self.ai startChatWithConfig:config requestId:requestId messages:messages
+                                      image:image thinking:thinking
+                                    onDelta:onDelta onReasoning:onReasoning
+                                     onDone:onDone onError:onError];
+    }
+    __weak typeof(self) weakSelf = self;
+    [self runSearchForQuery:query config:config requestId:requestId
+                 completion:^(NSString *context, NSArray *items) {
+        (void)items;
+        if (weakSelf == nil) {
+            return;
+        }
+        NSArray *finalMessages = context.length
+            ? [weakSelf searchMessagesByInjecting:context into:messages]
+            : messages;
+        [weakSelf.ai startChatWithConfig:config requestId:requestId messages:finalMessages
+                                   image:image thinking:thinking
+                                 onDelta:onDelta onReasoning:onReasoning
+                                  onDone:onDone onError:onError];
+    }];
+    return requestId;
 }
 
 #pragma mark - Image picker

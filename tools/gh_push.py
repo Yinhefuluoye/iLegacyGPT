@@ -15,7 +15,7 @@ import os
 import subprocess
 import sys
 
-REPO = "Yinhefuluoye/ipad-chat-client"
+REPO = "Yinhefuluoye/iLegacyGPT"
 BRANCH = "main"
 GH = os.environ.get("GH_BIN", r"D:\Developer\tools\gh\bin\gh.exe")
 TMP = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), ".ghcache", "api")

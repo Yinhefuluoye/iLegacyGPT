@@ -183,6 +183,8 @@ export class App {
 
   private bindEvents(): void {
     this.on($('settingsBtn'), 'click', () => this.openSettings());
+    this.on($('searchChip'), 'click', () => this.toggleSearch());
+    this.bindSearchFields();
     this.on($('settingsClose'), 'click', () => this.closeOverlay($('settingsOverlay')));
     this.on($('newChatBtn'), 'click', () => this.newChat());
     this.on($('plusBtn'), 'click', () => this.pickImage());
@@ -324,6 +326,7 @@ export class App {
       document.documentElement.style.setProperty('--kb', '0px');
       this.scrollToBottom(true);
     });
+    this.bridge.on('sources', (m: Msg) => this.renderSources(m.items));
     this.bridge.on('image', (m: Msg) => this.receiveImage(m));
     this.bridge.on('models', (m: Msg) => this.receiveModels(m));
     this.bridge.on('config', (m: Msg) => {
@@ -348,6 +351,15 @@ export class App {
       model: cfg.model || 'deepseek-chat',
       models: Array.isArray(cfg.models) ? cfg.models.slice() : [],
       fontSize: Number(cfg.fontSize) || 16,
+      search: {
+        enabled: !!(cfg.search && cfg.search.enabled),
+        url: (cfg.search && cfg.search.url) || '',
+        key: (cfg.search && cfg.search.key) || '',
+        header: (cfg.search && cfg.search.header) || 'Authorization',
+        prefix: (cfg.search && cfg.search.prefix) || 'Bearer ',
+        body: (cfg.search && cfg.search.body) || '{"query":"{{query}}","num_results":{{num}}}',
+        num: Number((cfg.search && cfg.search.num) || 5)
+      },
       thinking: {
         level: Number((cfg.thinking && cfg.thinking.level) || 0),
         mode: (cfg.thinking && cfg.thinking.mode) || 'auto',
@@ -371,6 +383,70 @@ export class App {
     const mode = (this.config.thinking && this.config.thinking.mode) || 'auto';
     $('thinkParamSelect').value = mode;
     this.updateThinkParamNote();
+    const search = this.config.search || {};
+    ($('searchUrl') as HTMLInputElement).value = search.url || '';
+    ($('searchKey') as HTMLInputElement).value = search.key || '';
+    ($('searchHeader') as HTMLInputElement).value = search.header || 'Authorization';
+    ($('searchPrefix') as HTMLInputElement).value = search.prefix || 'Bearer ';
+    ($('searchBody') as HTMLInputElement).value = search.body || '{"query":"{{query}}","num_results":{{num}}}';
+    ($('searchNum') as HTMLSelectElement).value = String(search.num || 5);
+    this.updateSearchChip();
+  }
+
+  private updateSearchChip(): void {
+    const chip = $('searchChip');
+    const label = $('searchLabel');
+    const on = !!(this.config.search && this.config.search.enabled);
+    chip.setAttribute('aria-pressed', on ? 'true' : 'false');
+    if (on) {
+      chip.classList.add('is-on');
+      label.textContent = '联网 · 开';
+    } else {
+      chip.classList.remove('is-on');
+      label.textContent = '联网';
+    }
+  }
+
+  private toggleSearch(): void {
+    if (!this.config.search) {
+      return;
+    }
+    this.config.search.enabled = !this.config.search.enabled;
+    if (this.config.search.enabled && !this.config.search.url) {
+      this.toast('先在设置里填联网搜索 API 地址');
+    }
+    this.updateSearchChip();
+    this.saveConfig();
+  }
+
+  private bindSearchFields(): void {
+    const map = [
+      ['searchUrl', 'url'],
+      ['searchKey', 'key'],
+      ['searchHeader', 'header'],
+      ['searchPrefix', 'prefix'],
+      ['searchBody', 'body']
+    ];
+    map.forEach((pair) => {
+      const node = $(pair[0]) as HTMLInputElement | null;
+      if (!node) {
+        return;
+      }
+      this.on(node, 'change', () => {
+        if (!this.config.search) {
+          this.config.search = { enabled: false };
+        }
+        this.config.search[pair[1]] = node.value;
+        this.saveConfig();
+      });
+    });
+    this.on($('searchNum'), 'change', () => {
+      if (!this.config.search) {
+        this.config.search = { enabled: false };
+      }
+      this.config.search.num = Number(($('searchNum') as HTMLSelectElement).value) || 5;
+      this.saveConfig();
+    });
   }
 
   private providerKey(baseUrl: string): string {
@@ -717,7 +793,8 @@ export class App {
       config: this.config,
       messages: this.historyForApi(),
       image: image,
-      thinking: thinking
+      thinking: thinking,
+      search: { enabled: !!(this.config.search && this.config.search.enabled) }
     });
   }
 
@@ -921,6 +998,43 @@ export class App {
       }
     }
     this.refreshSendState();
+  }
+
+  private renderSources(items: any): void {
+    if (!Array.isArray(items) || !items.length) {
+      return;
+    }
+    const last = this.messages[this.messages.length - 1];
+    if (!last) {
+      return;
+    }
+    const wrap = this.threadInner.querySelector('[data-id="' + last.id + '"]') as HTMLElement | null;
+    if (!wrap) {
+      return;
+    }
+    const old = wrap.querySelector('.sources');
+    if (old) {
+      old.parentNode!.removeChild(old);
+    }
+    const box = el('div', 'sources');
+    box.appendChild(el('div', 'sources-head', '来源 · 点击用 Safari 打开'));
+    const list = el('ol', 'sources-list');
+    for (let i = 0; i < items.length; i++) {
+      const item = items[i] || {};
+      const li = el('li', 'source-item') as HTMLElement;
+      const link = el('a', 'source-link', String(item.title || item.url || '来源')) as HTMLAnchorElement;
+      link.href = String(item.url || '');
+      link.setAttribute('target', '_blank');
+      link.setAttribute('rel', 'noopener noreferrer');
+      li.appendChild(link);
+      if (item.url) {
+        const host = el('span', 'source-host', String(item.url).replace(/^https?:\/\//, '').split('/')[0]);
+        li.appendChild(host);
+      }
+      list.appendChild(li);
+    }
+    box.appendChild(list);
+    wrap.appendChild(box);
   }
 
   private appendMessageEl(msg: Message, streaming: boolean): void {

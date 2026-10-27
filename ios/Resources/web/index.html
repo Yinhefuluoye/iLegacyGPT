@@ -1029,6 +1029,30 @@ svg { display: block; }
 .msg.user .bubble-img:last-child {
   margin-bottom: 0;
 }
+
+/* web search chip + sources */
+.search-chip.is-on {
+  background: var(--think-on-bg);
+  border-color: var(--think-on-border);
+  color: var(--think-on-fg);
+}
+.search-chip.is-on .think-dot { opacity: 1; background: var(--accent); }
+.sources {
+  margin-top: 14px;
+  padding-top: 12px;
+  border-top: 1px solid rgba(0, 0, 0, 0.06);
+}
+.sources-head {
+  font-size: 12px;
+  letter-spacing: 0.5px;
+  color: rgba(27, 29, 26, 0.42);
+  margin-bottom: 6px;
+}
+.sources-list { margin: 0; padding-left: 18px; }
+.source-item { font-size: 13px; line-height: 1.6; margin-bottom: 4px; color: #5b605a; }
+.source-link { color: #8a5f28; text-decoration: none; }
+.source-host { margin-left: 6px; font-size: 11px; color: rgba(27, 29, 26, 0.36); }
+
 </style>
 </head>
 <body>
@@ -1101,6 +1125,9 @@ svg { display: block; }
               <button class="chip think-chip" id="thinkChip" type="button" aria-pressed="false" aria-label="思考档位">
                 <span class="think-dot"></span><span id="thinkLabel">思考</span>
               </button>
+              <button class="chip search-chip" id="searchChip" type="button" aria-pressed="false" aria-label="联网搜索">
+                <span class="think-dot"></span><span id="searchLabel">联网</span>
+              </button>
               <button class="send-btn" id="sendBtn" type="button" aria-label="发送" disabled>
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
                   <path d="M12 19V5"></path>
@@ -1172,6 +1199,37 @@ svg { display: block; }
         </div>
       </div>
 
+      <div class="field">
+        <label class="field-label" for="searchUrl">联网搜索 API 地址</label>
+        <input class="field-input" id="searchUrl" type="text" placeholder="https://api.tavily.com/search">
+      </div>
+      <div class="field">
+        <label class="field-label" for="searchKey">搜索 API Key</label>
+        <input class="field-input" id="searchKey" type="password" placeholder="可选（不需鉴权时留空）">
+      </div>
+      <div class="field-row">
+        <div class="field field-grow">
+          <label class="field-label" for="searchHeader">鉴权 Header</label>
+          <input class="field-input" id="searchHeader" type="text" placeholder="Authorization">
+        </div>
+        <div class="field field-grow">
+          <label class="field-label" for="searchPrefix">前缀</label>
+          <input class="field-input" id="searchPrefix" type="text" placeholder="Bearer ">
+        </div>
+      </div>
+      <div class="field">
+        <label class="field-label" for="searchBody">请求体模板</label>
+        <input class="field-input" id="searchBody" type="text" placeholder='{"query":"{{query}}","num_results":{{num}}}'>
+        <p class="field-note">支持 {{query}} 与 {{num}}，默认 POST JSON</p>
+      </div>
+      <div class="field">
+        <label class="field-label" for="searchNum">结果条数</label>
+        <select id="searchNum">
+          <option value="3">3</option>
+          <option value="5">5</option>
+          <option value="8">8</option>
+        </select>
+      </div>
       <div class="field">
         <label class="field-label" for="providerSelect">API 提供商</label>
         <div class="select-shell">
@@ -1711,6 +1769,8 @@ svg { display: block; }
     }
     bindEvents() {
       this.on($("settingsBtn"), "click", () => this.openSettings());
+      this.on($("searchChip"), "click", () => this.toggleSearch());
+      this.bindSearchFields();
       this.on($("settingsClose"), "click", () => this.closeOverlay($("settingsOverlay")));
       this.on($("newChatBtn"), "click", () => this.newChat());
       this.on($("plusBtn"), "click", () => this.pickImage());
@@ -1840,6 +1900,7 @@ svg { display: block; }
         document.documentElement.style.setProperty("--kb", "0px");
         this.scrollToBottom(true);
       });
+      this.bridge.on("sources", (m) => this.renderSources(m.items));
       this.bridge.on("image", (m) => this.receiveImage(m));
       this.bridge.on("models", (m) => this.receiveModels(m));
       this.bridge.on("config", (m) => {
@@ -1862,6 +1923,15 @@ svg { display: block; }
         model: cfg.model || "deepseek-chat",
         models: Array.isArray(cfg.models) ? cfg.models.slice() : [],
         fontSize: Number(cfg.fontSize) || 16,
+        search: {
+          enabled: !!(cfg.search && cfg.search.enabled),
+          url: cfg.search && cfg.search.url || "",
+          key: cfg.search && cfg.search.key || "",
+          header: cfg.search && cfg.search.header || "Authorization",
+          prefix: cfg.search && cfg.search.prefix || "Bearer ",
+          body: cfg.search && cfg.search.body || '{"query":"{{query}}","num_results":{{num}}}',
+          num: Number(cfg.search && cfg.search.num || 5)
+        },
         thinking: {
           level: Number(cfg.thinking && cfg.thinking.level || 0),
           mode: cfg.thinking && cfg.thinking.mode || "auto",
@@ -1884,6 +1954,67 @@ svg { display: block; }
       const mode = this.config.thinking && this.config.thinking.mode || "auto";
       $("thinkParamSelect").value = mode;
       this.updateThinkParamNote();
+      const search = this.config.search || {};
+      $("searchUrl").value = search.url || "";
+      $("searchKey").value = search.key || "";
+      $("searchHeader").value = search.header || "Authorization";
+      $("searchPrefix").value = search.prefix || "Bearer ";
+      $("searchBody").value = search.body || '{"query":"{{query}}","num_results":{{num}}}';
+      $("searchNum").value = String(search.num || 5);
+      this.updateSearchChip();
+    }
+    updateSearchChip() {
+      const chip = $("searchChip");
+      const label = $("searchLabel");
+      const on = !!(this.config.search && this.config.search.enabled);
+      chip.setAttribute("aria-pressed", on ? "true" : "false");
+      if (on) {
+        chip.classList.add("is-on");
+        label.textContent = "\u8054\u7F51 \xB7 \u5F00";
+      } else {
+        chip.classList.remove("is-on");
+        label.textContent = "\u8054\u7F51";
+      }
+    }
+    toggleSearch() {
+      if (!this.config.search) {
+        return;
+      }
+      this.config.search.enabled = !this.config.search.enabled;
+      if (this.config.search.enabled && !this.config.search.url) {
+        this.toast("\u5148\u5728\u8BBE\u7F6E\u91CC\u586B\u8054\u7F51\u641C\u7D22 API \u5730\u5740");
+      }
+      this.updateSearchChip();
+      this.saveConfig();
+    }
+    bindSearchFields() {
+      const map = [
+        ["searchUrl", "url"],
+        ["searchKey", "key"],
+        ["searchHeader", "header"],
+        ["searchPrefix", "prefix"],
+        ["searchBody", "body"]
+      ];
+      map.forEach((pair) => {
+        const node = $(pair[0]);
+        if (!node) {
+          return;
+        }
+        this.on(node, "change", () => {
+          if (!this.config.search) {
+            this.config.search = { enabled: false };
+          }
+          this.config.search[pair[1]] = node.value;
+          this.saveConfig();
+        });
+      });
+      this.on($("searchNum"), "change", () => {
+        if (!this.config.search) {
+          this.config.search = { enabled: false };
+        }
+        this.config.search.num = Number($("searchNum").value) || 5;
+        this.saveConfig();
+      });
     }
     providerKey(baseUrl) {
       const url = String(baseUrl || "");
@@ -2191,7 +2322,8 @@ svg { display: block; }
         config: this.config,
         messages: this.historyForApi(),
         image,
-        thinking
+        thinking,
+        search: { enabled: !!(this.config.search && this.config.search.enabled) }
       });
     }
     stop() {
@@ -2381,6 +2513,42 @@ svg { display: block; }
         }
       }
       this.refreshSendState();
+    }
+    renderSources(items) {
+      if (!Array.isArray(items) || !items.length) {
+        return;
+      }
+      const last = this.messages[this.messages.length - 1];
+      if (!last) {
+        return;
+      }
+      const wrap = this.threadInner.querySelector('[data-id="' + last.id + '"]');
+      if (!wrap) {
+        return;
+      }
+      const old = wrap.querySelector(".sources");
+      if (old) {
+        old.parentNode.removeChild(old);
+      }
+      const box = el("div", "sources");
+      box.appendChild(el("div", "sources-head", "\u6765\u6E90 \xB7 \u70B9\u51FB\u7528 Safari \u6253\u5F00"));
+      const list = el("ol", "sources-list");
+      for (let i = 0; i < items.length; i++) {
+        const item = items[i] || {};
+        const li = el("li", "source-item");
+        const link = el("a", "source-link", String(item.title || item.url || "\u6765\u6E90"));
+        link.href = String(item.url || "");
+        link.setAttribute("target", "_blank");
+        link.setAttribute("rel", "noopener noreferrer");
+        li.appendChild(link);
+        if (item.url) {
+          const host = el("span", "source-host", String(item.url).replace(/^https?:\/\//, "").split("/")[0]);
+          li.appendChild(host);
+        }
+        list.appendChild(li);
+      }
+      box.appendChild(list);
+      wrap.appendChild(box);
     }
     appendMessageEl(msg, streaming) {
       if (msg.role === "user") {

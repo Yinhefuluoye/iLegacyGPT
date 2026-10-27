@@ -17,7 +17,7 @@
 | `config.get` | — | 返回 `{type:"config", config:{...}}` |
 | `config.set` | `config:{...}` | 持久化并返回 `{type:"config", config:{...}}` |
 | `models.fetch` | `config:{base,port,key}` | 请求 `GET {base}/models` → `{type:"models", models:[{id,...}], raw}` 或 `{type:"error", ...}` |
-| `chat.start` | `requestId, config:{base,port,key}, model, messages:[{role,content}], image?:{mime,dataBase64}, thinking:{enabled,param,onValue,offValue}` | 流式返回 `delta`/`done`/`error` |
+| `chat.start` | `requestId, config:{base,port,key}, model, messages:[{role,content}], image?:{mime,dataBase64}, thinking:{enabled,level,param,onValue,offValue}` | 流式返回 `delta`/`done`/`error` |
 | `chat.stop` | `requestId` | 取消该次请求，返回 `{type:"aborted", requestId}` |
 | `image.pick` | `source:"library"\|"camera"` | 返回 `{type:"image", image:{mime,dataBase64,width,height}}` 或 `{type:"cancel"}` |
 | `store.load` | — | 返回 `{type:"store", data:{...}}` |
@@ -50,10 +50,22 @@
   "apiKey": "sk-...",
   "model": "deepseek-chat",
   "models": ["deepseek-chat", "deepseek-reasoner"],
-  "thinking": { "enabled": false, "param": "reasoning_effort", "onValue": "high", "offValue": "" },
+  "thinking": { "enabled": false, "level": 0, "param": "reasoning_effort", "onValue": "high", "offValue": "" },
   "fontSize": 17
 }
 ```
+
+`thinking.level` 是 UI 的档位（0 关闭 / 1 低 / 2 中 / 3 高）。`onValue` 由 UI 按档位给出：
+
+| level | 名称 | `enabled` | `onValue`（默认 `reasoning_effort`） |
+| --- | --- | --- | --- |
+| 0 | 关闭 | false | — |
+| 1 | 低 | true | `low` |
+| 2 | 中 | true | `medium` |
+| 3 | 高 | true | `high` |
+
+原生按 `thinking.enabled` 决定是否把 `{param: onValue}` 加进请求体；换 provider 时只需在设置里改
+`param`/值映射（例如 Qwen 系可用 `enable_thinking` + `thinking_budget`）。
 
 ## 约束
 

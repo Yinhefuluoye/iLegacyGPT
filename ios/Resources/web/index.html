@@ -1395,2042 +1395,2281 @@ svg { display: block; }
 <input type="file" id="fileInput" accept="image/*" style="display:none">
 <script>
 "use strict";
-(() => {
-  var __async = (__this, __arguments, generator) => {
-    return new Promise((resolve, reject) => {
-      var fulfilled = (value) => {
-        try {
-          step(generator.next(value));
-        } catch (e) {
-          reject(e);
-        }
-      };
-      var rejected = (value) => {
-        try {
-          step(generator.throw(value));
-        } catch (e) {
-          reject(e);
-        }
-      };
-      var step = (x) => x.done ? resolve(x.value) : Promise.resolve(x.value).then(fulfilled, rejected);
-      step((generator = generator.apply(__this, __arguments)).next());
-    });
+(function() {
+  var __getOwnPropNames = Object.getOwnPropertyNames;
+  var __commonJS = function(cb, mod) {
+    return function __require() {
+      try {
+        return mod || (0, cb[__getOwnPropNames(cb)[0]])((mod = { exports: {} }).exports, mod), mod.exports;
+      } catch (e) {
+        throw mod = 0, e;
+      }
+    };
   };
 
-  // src/bridge.ts
-  function nativeAvailable() {
-    const w = window;
-    return !!(w.webkit && w.webkit.messageHandlers && w.webkit.messageHandlers.chat);
-  }
-  var Bridge = class {
-    constructor() {
-      this.native = nativeAvailable();
-      this.waiters = [];
-      this.listeners = {};
-      this.mockTimer = 0;
-      window.__onNative = (msg) => this.receive(msg);
-      if (!this.native) {
-        setTimeout(() => this.receive({ type: "ready", build: "mock", platform: "desktop" }), 30);
+  // .build/es5/bridge.js
+  var require_bridge = __commonJS({
+    ".build/es5/bridge.js": function(exports) {
+      "use strict";
+      Object.defineProperty(exports, "__esModule", { value: true });
+      exports.MOCK_CONFIG = exports.Bridge = void 0;
+      function nativeAvailable() {
+        var w = window;
+        return !!(w.webkit && w.webkit.messageHandlers && w.webkit.messageHandlers.chat);
       }
-    }
-    on(type, fn) {
-      (this.listeners[type] = this.listeners[type] || []).push(fn);
-    }
-    post(op, data) {
-      const payload = { op };
-      if (data) {
-        for (const k in data) {
-          if (Object.prototype.hasOwnProperty.call(data, k)) {
-            payload[k] = data[k];
-          }
-        }
-      }
-      if (!this.native) {
-        this.mockReply(op, payload);
-        return;
-      }
-      window.webkit.messageHandlers.chat.postMessage(payload);
-    }
-    request(op, data, expect, timeoutMs, match) {
-      const self = this;
-      return new Promise(function(resolve, reject) {
-        const timer = window.setTimeout(function() {
-          for (let i = self.waiters.length - 1; i >= 0; i--) {
-            if (self.waiters[i].timer === timer) {
-              self.waiters.splice(i, 1);
+      var Bridge = (
+        /** @class */
+        (function() {
+          function Bridge2() {
+            var _this = this;
+            this.native = nativeAvailable();
+            this.waiters = [];
+            this.listeners = {};
+            this.mockTimer = 0;
+            window.__onNative = function(msg) {
+              return _this.receive(msg);
+            };
+            if (!this.native) {
+              setTimeout(function() {
+                return _this.receive({ type: "ready", build: "mock", platform: "desktop" });
+              }, 30);
             }
           }
-          reject(new Error("timeout: " + expect));
-        }, timeoutMs || 2e4);
-        self.waiters.push({ type: expect, match, resolve, timer });
-        self.post(op, data);
-      });
-    }
-    receive(msg) {
-      if (!msg || !msg.type) {
-        return;
-      }
-      for (let i = this.waiters.length - 1; i >= 0; i--) {
-        const w = this.waiters[i];
-        if (w.type === msg.type && (!w.match || w.match(msg))) {
-          this.waiters.splice(i, 1);
-          window.clearTimeout(w.timer);
-          w.resolve(msg);
-          return;
-        }
-      }
-      const fns = this.listeners[msg.type];
-      if (fns) {
-        for (let j = 0; j < fns.length; j++) {
-          fns[j](msg);
-        }
-      }
-    }
-    /* ---------------------------------------------------------------- mock -- */
-    mockReply(op, payload) {
-      const self = this;
-      if (op === "config.get" || op === "config.set") {
-        this.receive({ type: "config", config: payload.config || MOCK_CONFIG });
-        return;
-      }
-      if (op === "store.load") {
-        this.receive({ type: "store", data: MOCK_STORE });
-        return;
-      }
-      if (op === "store.save" || op === "store.clear") {
-        this.receive({ type: "ok", op });
-        return;
-      }
-      if (op === "models.fetch") {
-        setTimeout(function() {
-          self.receive({ type: "models", models: MOCK_MODELS, raw: null });
-        }, 200);
-        return;
-      }
-      if (op === "chat.stop") {
-        if (this.mockTimer) {
-          window.clearInterval(this.mockTimer);
-          this.mockTimer = 0;
-        }
-        this.receive({ type: "aborted", requestId: payload.requestId });
-        return;
-      }
-      if (op === "chat.start") {
-        const rid = payload.requestId;
-        const text = MOCK_REPLY;
-        const reasoning = MOCK_REASONING;
-        let ri = 0;
-        let i = 0;
-        if (this.mockTimer) {
-          window.clearInterval(this.mockTimer);
-        }
-        this.mockTimer = window.setInterval(function() {
-          if (ri < reasoning.length) {
-            const rn = Math.min(reasoning.length, ri + 5);
-            self.receive({ type: "reasoning", requestId: rid, text: reasoning.slice(ri, rn) });
-            ri = rn;
-            return;
-          }
-          const next = Math.min(text.length, i + 3);
-          const chunk = text.slice(i, next);
-          i = next;
-          if (chunk) {
-            self.receive({ type: "delta", requestId: rid, text: chunk });
-          }
-          if (i >= text.length) {
-            window.clearInterval(self.mockTimer);
-            self.mockTimer = 0;
-            self.receive({ type: "done", requestId: rid, usage: null });
-          }
-        }, 40);
-        return;
-      }
-      if (op === "image.pick") {
-        const canvas = document.createElement("canvas");
-        canvas.width = 640;
-        canvas.height = 400;
-        const ctx = canvas.getContext("2d");
-        if (ctx) {
-          ctx.fillStyle = "#f6f6f2";
-          ctx.fillRect(0, 0, 640, 400);
-          ctx.strokeStyle = "#3a2a1a";
-          ctx.lineWidth = 16;
-          ctx.beginPath();
-          ctx.ellipse(320, 200, 150, 100, 0, 0, Math.PI * 2);
-          ctx.stroke();
-          ctx.fillStyle = "#3a2a1a";
-          ctx.beginPath();
-          ctx.ellipse(320, 200, 22, 70, 0, 0, Math.PI * 2);
-          ctx.fill();
-        }
-        const url = canvas.toDataURL("image/jpeg", 0.8);
-        self.receive({
-          type: "image",
-          requestId: payload.requestId || "",
-          image: {
-            mime: "image/jpeg",
-            dataBase64: url.split(",")[1] || "",
-            width: 640,
-            height: 400
-          }
-        });
-        return;
-      }
-      if (op === "log.write") {
-        return;
-      }
-    }
-  };
-  var NOW = Date.now();
-  var DAY = 864e5;
-  var MOCK_STORE = {
-    v: 2,
-    currentId: "s-demo-1",
-    sessions: [
-      {
-        id: "s-demo-1",
-        title: "\u5E2E\u6211\u7B80\u5316 iPad \u5BA2\u6237\u7AEF\u4EA4\u4E92",
-        createdAt: NOW - 2 * DAY,
-        updatedAt: NOW - 3 * 6e4,
-        messages: [
-          { id: "m1", role: "user", content: "\u5E2E\u6211\u7B80\u5316 iPad \u5BA2\u6237\u7AEF\u7684\u4EA4\u4E92", ts: NOW - 3 * 6e4 },
+          Bridge2.prototype.on = function(type, fn) {
+            (this.listeners[type] = this.listeners[type] || []).push(fn);
+          };
+          Bridge2.prototype.post = function(op, data) {
+            var payload = { op: op };
+            if (data) {
+              for (var k in data) {
+                if (Object.prototype.hasOwnProperty.call(data, k)) {
+                  payload[k] = data[k];
+                }
+              }
+            }
+            if (!this.native) {
+              this.mockReply(op, payload);
+              return;
+            }
+            window.webkit.messageHandlers.chat.postMessage(payload);
+          };
+          Bridge2.prototype.request = function(op, data, expect, timeoutMs, match) {
+            var self = this;
+            return new Promise(function(resolve, reject) {
+              var timer = window.setTimeout(function() {
+                for (var i = self.waiters.length - 1; i >= 0; i--) {
+                  if (self.waiters[i].timer === timer) {
+                    self.waiters.splice(i, 1);
+                  }
+                }
+                reject(new Error("timeout: " + expect));
+              }, timeoutMs || 2e4);
+              self.waiters.push({ type: expect, match: match, resolve: resolve, timer: timer });
+              self.post(op, data);
+            });
+          };
+          Bridge2.prototype.receive = function(msg) {
+            if (!msg || !msg.type) {
+              return;
+            }
+            for (var i = this.waiters.length - 1; i >= 0; i--) {
+              var w = this.waiters[i];
+              if (w.type === msg.type && (!w.match || w.match(msg))) {
+                this.waiters.splice(i, 1);
+                window.clearTimeout(w.timer);
+                w.resolve(msg);
+                return;
+              }
+            }
+            var fns = this.listeners[msg.type];
+            if (fns) {
+              for (var j = 0; j < fns.length; j++) {
+                fns[j](msg);
+              }
+            }
+          };
+          Bridge2.prototype.mockReply = function(op, payload) {
+            var self = this;
+            if (op === "config.get" || op === "config.set") {
+              this.receive({ type: "config", config: payload.config || exports.MOCK_CONFIG });
+              return;
+            }
+            if (op === "store.load") {
+              this.receive({ type: "store", data: MOCK_STORE });
+              return;
+            }
+            if (op === "store.save" || op === "store.clear") {
+              this.receive({ type: "ok", op: op });
+              return;
+            }
+            if (op === "models.fetch") {
+              setTimeout(function() {
+                self.receive({ type: "models", models: MOCK_MODELS, raw: null });
+              }, 200);
+              return;
+            }
+            if (op === "chat.stop") {
+              if (this.mockTimer) {
+                window.clearInterval(this.mockTimer);
+                this.mockTimer = 0;
+              }
+              this.receive({ type: "aborted", requestId: payload.requestId });
+              return;
+            }
+            if (op === "chat.start") {
+              var rid_1 = payload.requestId;
+              var text_1 = MOCK_REPLY;
+              var reasoning_1 = MOCK_REASONING;
+              var ri_1 = 0;
+              var i_1 = 0;
+              if (this.mockTimer) {
+                window.clearInterval(this.mockTimer);
+              }
+              this.mockTimer = window.setInterval(function() {
+                if (ri_1 < reasoning_1.length) {
+                  var rn = Math.min(reasoning_1.length, ri_1 + 5);
+                  self.receive({ type: "reasoning", requestId: rid_1, text: reasoning_1.slice(ri_1, rn) });
+                  ri_1 = rn;
+                  return;
+                }
+                var next = Math.min(text_1.length, i_1 + 3);
+                var chunk = text_1.slice(i_1, next);
+                i_1 = next;
+                if (chunk) {
+                  self.receive({ type: "delta", requestId: rid_1, text: chunk });
+                }
+                if (i_1 >= text_1.length) {
+                  window.clearInterval(self.mockTimer);
+                  self.mockTimer = 0;
+                  self.receive({ type: "done", requestId: rid_1, usage: null });
+                }
+              }, 40);
+              return;
+            }
+            if (op === "image.pick") {
+              var canvas = document.createElement("canvas");
+              canvas.width = 640;
+              canvas.height = 400;
+              var ctx = canvas.getContext("2d");
+              if (ctx) {
+                ctx.fillStyle = "#f6f6f2";
+                ctx.fillRect(0, 0, 640, 400);
+                ctx.strokeStyle = "#3a2a1a";
+                ctx.lineWidth = 16;
+                ctx.beginPath();
+                ctx.ellipse(320, 200, 150, 100, 0, 0, Math.PI * 2);
+                ctx.stroke();
+                ctx.fillStyle = "#3a2a1a";
+                ctx.beginPath();
+                ctx.ellipse(320, 200, 22, 70, 0, 0, Math.PI * 2);
+                ctx.fill();
+              }
+              var url = canvas.toDataURL("image/jpeg", 0.8);
+              self.receive({
+                type: "image",
+                requestId: payload.requestId || "",
+                image: {
+                  mime: "image/jpeg",
+                  dataBase64: url.split(",")[1] || "",
+                  width: 640,
+                  height: 400
+                }
+              });
+              return;
+            }
+            if (op === "log.write") {
+              return;
+            }
+          };
+          return Bridge2;
+        })()
+      );
+      exports.Bridge = Bridge;
+      var NOW = Date.now();
+      var DAY = 864e5;
+      var MOCK_STORE = {
+        v: 2,
+        currentId: "s-demo-1",
+        sessions: [
           {
-            id: "m2",
-            role: "assistant",
-            content: "\u597D\u7684\uFF0C\u5148\u7ED9\u4F60\u4E00\u4E2A\u6700\u5C0F\u53EF\u884C\u65B9\u6848\uFF1A\n\n- \u754C\u9762\u53EA\u4FDD\u7559\u4E00\u4E2A\u8F93\u5165\u5165\u53E3\u548C\u4E00\u5904\u8BBE\u7F6E\n- \u7F51\u7EDC\u5C42\u53EA\u505A\u4E00\u4E2A\u8F6C\u53D1\u63A5\u53E3\uFF0C\u4E0D\u505A\u8D26\u53F7\u4F53\u7CFB\n- \u914D\u7F6E\u5168\u90E8\u5B58\u5728\u672C\u673A\uFF0C\u6362\u6A21\u578B\u65F6\u4E0D\u6539\u52A8\u754C\u9762",
-            ts: NOW - 3 * 6e4 + 1200
+            id: "s-demo-1",
+            title: "\u5E2E\u6211\u7B80\u5316 iPad \u5BA2\u6237\u7AEF\u4EA4\u4E92",
+            createdAt: NOW - 2 * DAY,
+            updatedAt: NOW - 3 * 6e4,
+            messages: [
+              { id: "m1", role: "user", content: "\u5E2E\u6211\u7B80\u5316 iPad \u5BA2\u6237\u7AEF\u7684\u4EA4\u4E92", ts: NOW - 3 * 6e4 },
+              {
+                id: "m2",
+                role: "assistant",
+                content: "\u597D\u7684\uFF0C\u5148\u7ED9\u4F60\u4E00\u4E2A\u6700\u5C0F\u53EF\u884C\u65B9\u6848\uFF1A\n\n- \u754C\u9762\u53EA\u4FDD\u7559\u4E00\u4E2A\u8F93\u5165\u5165\u53E3\u548C\u4E00\u5904\u8BBE\u7F6E\n- \u7F51\u7EDC\u5C42\u53EA\u505A\u4E00\u4E2A\u8F6C\u53D1\u63A5\u53E3\uFF0C\u4E0D\u505A\u8D26\u53F7\u4F53\u7CFB\n- \u914D\u7F6E\u5168\u90E8\u5B58\u5728\u672C\u673A\uFF0C\u6362\u6A21\u578B\u65F6\u4E0D\u6539\u52A8\u754C\u9762",
+                ts: NOW - 3 * 6e4 + 1200
+              }
+            ]
+          },
+          {
+            id: "s-demo-2",
+            title: "\u628A\u601D\u8003\u6863\u4F4D\u52A0\u5230\u8F93\u5165\u6846",
+            createdAt: NOW - DAY,
+            updatedAt: NOW - DAY,
+            messages: [
+              { id: "m3", role: "user", content: "\u628A\u601D\u8003\u6863\u4F4D\u52A0\u5230\u8F93\u5165\u6846", ts: NOW - DAY },
+              {
+                id: "m4",
+                role: "assistant",
+                content: "\u53EF\u4EE5\u505A\u6210\u4E00\u679A chip\uFF1A\u5173\u95ED / \u4F4E / \u4E2D / \u9AD8\uFF0C\u6362\u7B97\u6210 reasoning_effort \u7684 low\u3001medium\u3001high\u3002",
+                ts: NOW - DAY + 2e3
+              }
+            ]
+          },
+          {
+            id: "s-demo-3",
+            title: "OpenAI \u517C\u5BB9\u63A5\u53E3\u7684\u6D41\u5F0F\u89E3\u6790",
+            createdAt: NOW - 4 * DAY,
+            updatedAt: NOW - 3 * DAY,
+            messages: [{ id: "m5", role: "user", content: "OpenAI \u517C\u5BB9\u63A5\u53E3\u7684\u6D41\u5F0F\u89E3\u6790", ts: NOW - 3 * DAY }]
+          },
+          {
+            id: "s-demo-4",
+            title: "\u786E\u8BA4\u6D45\u8272\u4E3B\u9898\u7684\u914D\u8272",
+            createdAt: NOW - 6 * DAY,
+            updatedAt: NOW - 5 * DAY,
+            messages: [{ id: "m6", role: "user", content: "\u786E\u8BA4\u6D45\u8272\u4E3B\u9898\u7684\u914D\u8272", ts: NOW - 5 * DAY }]
           }
         ]
-      },
-      {
-        id: "s-demo-2",
-        title: "\u628A\u601D\u8003\u6863\u4F4D\u52A0\u5230\u8F93\u5165\u6846",
-        createdAt: NOW - DAY,
-        updatedAt: NOW - DAY,
-        messages: [
-          { id: "m3", role: "user", content: "\u628A\u601D\u8003\u6863\u4F4D\u52A0\u5230\u8F93\u5165\u6846", ts: NOW - DAY },
-          {
-            id: "m4",
-            role: "assistant",
-            content: "\u53EF\u4EE5\u505A\u6210\u4E00\u679A chip\uFF1A\u5173\u95ED / \u4F4E / \u4E2D / \u9AD8\uFF0C\u6362\u7B97\u6210 reasoning_effort \u7684 low\u3001medium\u3001high\u3002",
-            ts: NOW - DAY + 2e3
-          }
-        ]
-      },
-      {
-        id: "s-demo-3",
-        title: "OpenAI \u517C\u5BB9\u63A5\u53E3\u7684\u6D41\u5F0F\u89E3\u6790",
-        createdAt: NOW - 4 * DAY,
-        updatedAt: NOW - 3 * DAY,
-        messages: [{ id: "m5", role: "user", content: "OpenAI \u517C\u5BB9\u63A5\u53E3\u7684\u6D41\u5F0F\u89E3\u6790", ts: NOW - 3 * DAY }]
-      },
-      {
-        id: "s-demo-4",
-        title: "\u786E\u8BA4\u6D45\u8272\u4E3B\u9898\u7684\u914D\u8272",
-        createdAt: NOW - 6 * DAY,
-        updatedAt: NOW - 5 * DAY,
-        messages: [{ id: "m6", role: "user", content: "\u786E\u8BA4\u6D45\u8272\u4E3B\u9898\u7684\u914D\u8272", ts: NOW - 5 * DAY }]
-      }
-    ]
-  };
-  var MOCK_CONFIG = {
-    provider: "DeepSeek",
-    baseUrl: "https://api.deepseek.com/v1",
-    port: 443,
-    apiKey: "",
-    model: "deepseek-chat",
-    models: ["deepseek-chat", "deepseek-reasoner", "gpt-4o-mini"],
-    thinking: { enabled: false, level: 0, param: "reasoning_effort", onValue: "high", offValue: "" },
-    fontSize: 16
-  };
-  var MOCK_MODELS = ["deepseek-chat", "deepseek-reasoner", "gpt-4o-mini", "qwen-max"];
-  var MOCK_REPLY = "\u597D\u7684\uFF0C\u5148\u7ED9\u4F60\u4E00\u4E2A\u6700\u5C0F\u53EF\u884C\u65B9\u6848\uFF1A\n\n- \u754C\u9762\u53EA\u4FDD\u7559\u4E00\u4E2A\u8F93\u5165\u5165\u53E3\u548C\u4E00\u5904\u8BBE\u7F6E\n- \u7F51\u7EDC\u5C42\u53EA\u505A\u4E00\u4E2A\u8F6C\u53D1\u63A5\u53E3\uFF0C\u4E0D\u505A\u8D26\u53F7\u4F53\u7CFB\n- \u914D\u7F6E\u5168\u90E8\u5B58\u5728\u672C\u673A\uFF0C\u6362\u6A21\u578B\u65F6\u4E0D\u6539\u52A8\u754C\u9762\n\n\u9700\u8981\u6211\u628A\u5B83\u62C6\u6210\u53EF\u6267\u884C\u7684\u4EFB\u52A1\u6E05\u5355\u5417\uFF1F";
-  var MOCK_REASONING = "\u5148\u770B\u7EA6\u675F\uFF1A32 \u4F4D\u8BBE\u5907\u3001iOS 10\u3001WKWebView \u53EA\u8D1F\u8D23\u6E32\u67D3\u3002\u754C\u9762\u8D8A\u5C11\u8D8A\u597D\uFF0C\u6240\u4EE5\u6838\u5FC3\u662F\u8F93\u5165\u6846 + \u4E00\u5904\u8BBE\u7F6E\u3002\u7F51\u7EDC\u5C42\u53EA\u505A\u8F6C\u53D1\uFF0C\u4E0D\u5F15\u5165\u8D26\u53F7\u4F53\u7CFB\uFF0C\u914D\u7F6E\u7559\u5728\u672C\u673A\u5373\u53EF\u3002";
+      };
+      exports.MOCK_CONFIG = {
+        provider: "DeepSeek",
+        baseUrl: "https://api.deepseek.com/v1",
+        port: 443,
+        apiKey: "",
+        model: "deepseek-chat",
+        models: ["deepseek-chat", "deepseek-reasoner", "gpt-4o-mini"],
+        thinking: { enabled: false, level: 0, param: "reasoning_effort", onValue: "high", offValue: "" },
+        fontSize: 16
+      };
+      var MOCK_MODELS = ["deepseek-chat", "deepseek-reasoner", "gpt-4o-mini", "qwen-max"];
+      var MOCK_REPLY = "\u597D\u7684\uFF0C\u5148\u7ED9\u4F60\u4E00\u4E2A\u6700\u5C0F\u53EF\u884C\u65B9\u6848\uFF1A\n\n- \u754C\u9762\u53EA\u4FDD\u7559\u4E00\u4E2A\u8F93\u5165\u5165\u53E3\u548C\u4E00\u5904\u8BBE\u7F6E\n- \u7F51\u7EDC\u5C42\u53EA\u505A\u4E00\u4E2A\u8F6C\u53D1\u63A5\u53E3\uFF0C\u4E0D\u505A\u8D26\u53F7\u4F53\u7CFB\n- \u914D\u7F6E\u5168\u90E8\u5B58\u5728\u672C\u673A\uFF0C\u6362\u6A21\u578B\u65F6\u4E0D\u6539\u52A8\u754C\u9762\n\n\u9700\u8981\u6211\u628A\u5B83\u62C6\u6210\u53EF\u6267\u884C\u7684\u4EFB\u52A1\u6E05\u5355\u5417\uFF1F";
+      var MOCK_REASONING = "\u5148\u770B\u7EA6\u675F\uFF1A32 \u4F4D\u8BBE\u5907\u3001iOS 10\u3001WKWebView \u53EA\u8D1F\u8D23\u6E32\u67D3\u3002\u754C\u9762\u8D8A\u5C11\u8D8A\u597D\uFF0C\u6240\u4EE5\u6838\u5FC3\u662F\u8F93\u5165\u6846 + \u4E00\u5904\u8BBE\u7F6E\u3002\u7F51\u7EDC\u5C42\u53EA\u505A\u8F6C\u53D1\uFF0C\u4E0D\u5F15\u5165\u8D26\u53F7\u4F53\u7CFB\uFF0C\u914D\u7F6E\u7559\u5728\u672C\u673A\u5373\u53EF\u3002";
+    }
+  });
 
-  // src/markdown.ts
-  function esc(text) {
-    return text.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
-  }
-  function emph(text) {
-    let s = text;
-    s = s.replace(/\*\*([^*\n]+)\*\*/g, "<strong>$1</strong>");
-    s = s.replace(/~~([^~\n]+)~~/g, "<del>$1</del>");
-    s = s.replace(/(^|[^*])\*([^*\n]+)\*/g, "$1<em>$2</em>");
-    return s;
-  }
-  var TOKEN = "\0";
-  function codeSpan(value) {
-    const trimmed = value.trim();
-    if (/^https?:\/\/\S+$/.test(trimmed)) {
-      return '<code><a href="' + trimmed + '" target="_blank">' + value + "</a></code>";
-    }
-    return "<code>" + value + "</code>";
-  }
-  function inline(text) {
-    const tokens = [];
-    function stash(html) {
-      tokens.push(html);
-      return TOKEN + (tokens.length - 1) + TOKEN;
-    }
-    let s = esc(text);
-    s = s.replace(/`([^`]+)`/g, function(_m, code) {
-      return stash(codeSpan(code));
-    });
-    s = s.replace(/!\[([^\]\n]*)\]\((https?:[^)\s]+)\)/g, function(_m, alt, url) {
-      return stash('<a href="' + url + '" target="_blank">[' + (alt || "\u56FE\u7247") + "]</a>");
-    });
-    s = s.replace(/\[([^\]\n]+)\]\((https?:[^)\s]+)\)/g, function(_m, label, url) {
-      return stash('<a href="' + url + '" target="_blank">' + emph(label) + "</a>");
-    });
-    s = emph(s);
-    s = s.replace(
-      /(?:https?:\/\/|www\.)[^\s<>"'\u3000\u3001\u3002\uff0c\uff1b\uff1a\uff01\uff1f\uff08\uff09]+/g,
-      function(raw) {
-        let url = raw;
-        const tail = [];
-        while (/[.,;:!?'"]$/.test(url)) {
-          tail.unshift(url.slice(-1));
-          url = url.slice(0, -1);
-        }
-        while (url.charAt(url.length - 1) === ")" && url.split("(").length - 1 < url.split(")").length - 1) {
-          tail.unshift(")");
-          url = url.slice(0, -1);
-        }
-        if (!url) {
-          return raw;
-        }
-        let href = url;
-        if (/^www\./i.test(href)) {
-          href = "http://" + href;
-        }
-        return '<a href="' + href + '" target="_blank">' + url + "</a>" + tail.join("");
+  // .build/es5/markdown.js
+  var require_markdown = __commonJS({
+    ".build/es5/markdown.js": function(exports) {
+      "use strict";
+      Object.defineProperty(exports, "__esModule", { value: true });
+      exports.renderMarkdown = renderMarkdown;
+      function esc(text) {
+        return text.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
       }
-    );
-    return s.replace(/\u0000(\d+)\u0000/g, function(_m, idx) {
-      return tokens[parseInt(idx, 10)];
-    });
-  }
-  var CELL_PIPE = "";
-  function splitRow(line) {
-    let s = String(line == null ? "" : line).trim();
-    if (s.charAt(0) === "|") {
-      s = s.slice(1);
-    }
-    if (s.charAt(s.length - 1) === "|") {
-      s = s.slice(0, -1);
-    }
-    s = s.split("\\|").join(CELL_PIPE);
-    const cells = s.split("|");
-    for (let i = 0; i < cells.length; i++) {
-      cells[i] = cells[i].split(CELL_PIPE).join("|").trim();
-    }
-    return cells;
-  }
-  function isTableSeparator(line) {
-    if (!line || line.indexOf("-") < 0) {
-      return false;
-    }
-    const cells = splitRow(line);
-    if (!cells.length) {
-      return false;
-    }
-    for (let i = 0; i < cells.length; i++) {
-      if (!/^:?-{1,}:?$/.test(cells[i])) {
-        return false;
+      function emph(text) {
+        var s = text;
+        s = s.replace(/\*\*([^*\n]+)\*\*/g, "<strong>$1</strong>");
+        s = s.replace(/~~([^~\n]+)~~/g, "<del>$1</del>");
+        s = s.replace(/(^|[^*])\*([^*\n]+)\*/g, "$1<em>$2</em>");
+        return s;
       }
-    }
-    return true;
-  }
-  function tableAlign(cell) {
-    if (/^:.*:$/.test(cell)) {
-      return "center";
-    }
-    if (/^:/.test(cell)) {
-      return "left";
-    }
-    if (/:$/.test(cell)) {
-      return "right";
-    }
-    return "";
-  }
-  function listMark(line) {
-    const bullet = /^([ \t]*)[-*+]\s+(.*)$/.exec(line);
-    if (bullet) {
-      return { indent: bullet[1].length, ordered: false, num: 0, text: bullet[2] };
-    }
-    const ordered = /^([ \t]*)(\d+)[.)]\s+(.*)$/.exec(line);
-    if (ordered) {
-      return { indent: ordered[1].length, ordered: true, num: parseInt(ordered[2], 10), text: ordered[3] };
-    }
-    return null;
-  }
-  function listItemHtml(text) {
-    const task = /^\[([ xX])\]\s+(.*)$/.exec(text);
-    if (task) {
-      const done = task[1].toLowerCase() === "x";
-      return '<span class="task-box' + (done ? " is-done" : "") + '"></span>' + inline(task[2]);
-    }
-    return inline(text);
-  }
-  function renderMarkdown(src) {
-    const lines = String(src == null ? "" : src).replace(/\r\n?/g, "\n").split("\n");
-    const out = [];
-    let i = 0;
-    let para = [];
-    function flushPara() {
-      if (para.length) {
-        out.push("<p>" + inline(para.join("\n")).replace(/\n/g, "<br>") + "</p>");
-        para = [];
+      var TOKEN = "\0";
+      function codeSpan(value) {
+        var trimmed = value.trim();
+        if (/^https?:\/\/\S+$/.test(trimmed)) {
+          return '<code><a href="' + trimmed + '" target="_blank">' + value + "</a></code>";
+        }
+        return "<code>" + value + "</code>";
       }
-    }
-    function startsBlock(line) {
-      return /^```/.test(line) || /^#{1,6}\s+/.test(line) || /^[ \t]*[-*+]\s+/.test(line) || /^[ \t]*\d+[.)]\s+/.test(line) || /^[ \t]*>\s?/.test(line) || /^[ \t]*(---|\*\*\*|___)\s*$/.test(line);
-    }
-    function renderList(cursor, baseIndent, depth) {
-      const first = listMark(lines[cursor.i]);
-      if (!first) {
+      function inline(text) {
+        var tokens = [];
+        function stash(html) {
+          tokens.push(html);
+          return TOKEN + (tokens.length - 1) + TOKEN;
+        }
+        var s = esc(text);
+        s = s.replace(/`([^`]+)`/g, function(_m, code) {
+          return stash(codeSpan(code));
+        });
+        s = s.replace(/!\[([^\]\n]*)\]\((https?:[^)\s]+)\)/g, function(_m, alt, url) {
+          return stash('<a href="' + url + '" target="_blank">[' + (alt || "\u56FE\u7247") + "]</a>");
+        });
+        s = s.replace(/\[([^\]\n]+)\]\((https?:[^)\s]+)\)/g, function(_m, label, url) {
+          return stash('<a href="' + url + '" target="_blank">' + emph(label) + "</a>");
+        });
+        s = emph(s);
+        s = s.replace(/(?:https?:\/\/|www\.)[^\s<>"'\u3000\u3001\u3002\uff0c\uff1b\uff1a\uff01\uff1f\uff08\uff09]+/g, function(raw) {
+          var url = raw;
+          var tail = [];
+          while (/[.,;:!?'"]$/.test(url)) {
+            tail.unshift(url.slice(-1));
+            url = url.slice(0, -1);
+          }
+          while (url.charAt(url.length - 1) === ")" && url.split("(").length - 1 < url.split(")").length - 1) {
+            tail.unshift(")");
+            url = url.slice(0, -1);
+          }
+          if (!url) {
+            return raw;
+          }
+          var href = url;
+          if (/^www\./i.test(href)) {
+            href = "http://" + href;
+          }
+          return '<a href="' + href + '" target="_blank">' + url + "</a>" + tail.join("");
+        });
+        return s.replace(/\u0000(\d+)\u0000/g, function(_m, idx) {
+          return tokens[parseInt(idx, 10)];
+        });
+      }
+      var CELL_PIPE = "";
+      function splitRow(line) {
+        var s = String(line == null ? "" : line).trim();
+        if (s.charAt(0) === "|") {
+          s = s.slice(1);
+        }
+        if (s.charAt(s.length - 1) === "|") {
+          s = s.slice(0, -1);
+        }
+        s = s.split("\\|").join(CELL_PIPE);
+        var cells = s.split("|");
+        for (var i = 0; i < cells.length; i++) {
+          cells[i] = cells[i].split(CELL_PIPE).join("|").trim();
+        }
+        return cells;
+      }
+      function isTableSeparator(line) {
+        if (!line || line.indexOf("-") < 0) {
+          return false;
+        }
+        var cells = splitRow(line);
+        if (!cells.length) {
+          return false;
+        }
+        for (var i = 0; i < cells.length; i++) {
+          if (!/^:?-{1,}:?$/.test(cells[i])) {
+            return false;
+          }
+        }
+        return true;
+      }
+      function tableAlign(cell) {
+        if (/^:.*:$/.test(cell)) {
+          return "center";
+        }
+        if (/^:/.test(cell)) {
+          return "left";
+        }
+        if (/:$/.test(cell)) {
+          return "right";
+        }
         return "";
       }
-      const ordered = first.ordered;
-      const startNumber = first.num;
-      const items = [];
-      while (cursor.i < lines.length) {
-        const mark = listMark(lines[cursor.i]);
-        if (!mark || mark.indent !== baseIndent || mark.ordered !== ordered) {
-          break;
+      function listMark(line) {
+        var bullet = /^([ \t]*)[-*+]\s+(.*)$/.exec(line);
+        if (bullet) {
+          return { indent: bullet[1].length, ordered: false, num: 0, text: bullet[2] };
         }
-        cursor.i++;
-        let text = mark.text;
-        while (cursor.i < lines.length && lines[cursor.i].trim() && !listMark(lines[cursor.i]) && !startsBlock(lines[cursor.i])) {
-          text += " " + lines[cursor.i].trim();
-          cursor.i++;
+        var ordered = /^([ \t]*)(\d+)[.)]\s+(.*)$/.exec(line);
+        if (ordered) {
+          return { indent: ordered[1].length, ordered: true, num: parseInt(ordered[2], 10), text: ordered[3] };
         }
-        let nested = "";
-        const next = cursor.i < lines.length ? listMark(lines[cursor.i]) : null;
-        if (next && next.indent > baseIndent && depth < 1) {
-          nested = renderList(cursor, next.indent, depth + 1);
+        return null;
+      }
+      function listItemHtml(text) {
+        var task = /^\[([ xX])\]\s+(.*)$/.exec(text);
+        if (task) {
+          var done = task[1].toLowerCase() === "x";
+          return '<span class="task-box' + (done ? " is-done" : "") + '"></span>' + inline(task[2]);
         }
-        items.push("<li>" + listItemHtml(text) + nested + "</li>");
-        if (cursor.i < lines.length && !lines[cursor.i].trim()) {
-          let j = cursor.i;
-          while (j < lines.length && !lines[j].trim()) {
-            j++;
+        return inline(text);
+      }
+      function renderMarkdown(src) {
+        var lines = String(src == null ? "" : src).replace(/\r\n?/g, "\n").split("\n");
+        var out = [];
+        var i = 0;
+        var para = [];
+        function flushPara() {
+          if (para.length) {
+            out.push("<p>" + inline(para.join("\n")).replace(/\n/g, "<br>") + "</p>");
+            para = [];
           }
-          const after = j < lines.length ? listMark(lines[j]) : null;
-          if (after && after.indent === baseIndent && after.ordered === ordered) {
-            cursor.i = j;
+        }
+        function startsBlock(line2) {
+          return /^```/.test(line2) || /^#{1,6}\s+/.test(line2) || /^[ \t]*[-*+]\s+/.test(line2) || /^[ \t]*\d+[.)]\s+/.test(line2) || /^[ \t]*>\s?/.test(line2) || /^[ \t]*(---|\*\*\*|___)\s*$/.test(line2);
+        }
+        function renderList(cursor2, baseIndent, depth) {
+          var first = listMark(lines[cursor2.i]);
+          if (!first) {
+            return "";
           }
+          var ordered = first.ordered;
+          var startNumber = first.num;
+          var items = [];
+          while (cursor2.i < lines.length) {
+            var mark2 = listMark(lines[cursor2.i]);
+            if (!mark2 || mark2.indent !== baseIndent || mark2.ordered !== ordered) {
+              break;
+            }
+            cursor2.i++;
+            var text = mark2.text;
+            while (cursor2.i < lines.length && lines[cursor2.i].trim() && !listMark(lines[cursor2.i]) && !startsBlock(lines[cursor2.i])) {
+              text += " " + lines[cursor2.i].trim();
+              cursor2.i++;
+            }
+            var nested = "";
+            var next = cursor2.i < lines.length ? listMark(lines[cursor2.i]) : null;
+            if (next && next.indent > baseIndent && depth < 1) {
+              nested = renderList(cursor2, next.indent, depth + 1);
+            }
+            items.push("<li>" + listItemHtml(text) + nested + "</li>");
+            if (cursor2.i < lines.length && !lines[cursor2.i].trim()) {
+              var j = cursor2.i;
+              while (j < lines.length && !lines[j].trim()) {
+                j++;
+              }
+              var after = j < lines.length ? listMark(lines[j]) : null;
+              if (after && after.indent === baseIndent && after.ordered === ordered) {
+                cursor2.i = j;
+              }
+            }
+          }
+          var tag = ordered ? "ol" : "ul";
+          var start = ordered && startNumber > 1 ? ' start="' + startNumber + '"' : "";
+          return "<" + tag + start + ">" + items.join("") + "</" + tag + ">";
         }
-      }
-      const tag = ordered ? "ol" : "ul";
-      const start = ordered && startNumber > 1 ? ' start="' + startNumber + '"' : "";
-      return "<" + tag + start + ">" + items.join("") + "</" + tag + ">";
-    }
-    while (i < lines.length) {
-      const line = lines[i];
-      if (/^```/.test(line)) {
-        flushPara();
-        const lang = line.replace(/^```/, "").trim();
-        const buf = [];
-        i++;
-        while (i < lines.length && !/^```/.test(lines[i])) {
-          buf.push(lines[i]);
-          i++;
-        }
-        i++;
-        out.push("<pre><code" + (lang ? ' class="lang-' + esc(lang) + '"' : "") + ">" + esc(buf.join("\n")) + "</code></pre>");
-        continue;
-      }
-      const h = line.match(/^(#{1,6})\s+(.*)$/);
-      if (h) {
-        flushPara();
-        const level = Math.min(Math.max(h[1].length, 2), 4);
-        out.push("<h" + level + ">" + inline(h[2]) + "</h" + level + ">");
-        i++;
-        continue;
-      }
-      if (/^[ \t]*(---|\*\*\*|___)\s*$/.test(line)) {
-        flushPara();
-        out.push("<hr>");
-        i++;
-        continue;
-      }
-      if (/^[ \t]*>\s?/.test(line)) {
-        flushPara();
-        const buf = [];
-        while (i < lines.length && /^[ \t]*>\s?/.test(lines[i])) {
-          buf.push(lines[i].replace(/^[ \t]*>\s?/, ""));
-          i++;
-        }
-        out.push("<blockquote>" + inline(buf.join("\n")).replace(/\n/g, "<br>") + "</blockquote>");
-        continue;
-      }
-      if (line.indexOf("|") >= 0 && i + 1 < lines.length && isTableSeparator(lines[i + 1])) {
-        flushPara();
-        const header = splitRow(line);
-        const aligns = splitRow(lines[i + 1]).map(tableAlign);
-        i += 2;
-        const rows = [];
         while (i < lines.length) {
-          const row = lines[i];
-          if (!row.trim() || row.indexOf("|") < 0 || isTableSeparator(row)) {
-            break;
-          }
-          rows.push(splitRow(row));
-          i++;
-        }
-        const wide = header.length >= 4 ? " is-wide" : "";
-        let html = '<div class="table-wrap' + wide + '"><table><thead><tr>';
-        for (let c = 0; c < header.length; c++) {
-          const style = aligns[c] ? ' style="text-align:' + aligns[c] + '"' : "";
-          html += "<th" + style + ">" + inline(header[c]) + "</th>";
-        }
-        html += "</tr></thead>";
-        if (rows.length) {
-          html += "<tbody>";
-          for (let r = 0; r < rows.length; r++) {
-            html += "<tr>";
-            for (let c = 0; c < header.length; c++) {
-              const style = aligns[c] ? ' style="text-align:' + aligns[c] + '"' : "";
-              html += "<td" + style + ">" + inline(rows[r][c] || "") + "</td>";
+          var line = lines[i];
+          if (/^```/.test(line)) {
+            flushPara();
+            var lang = line.replace(/^```/, "").trim();
+            var buf = [];
+            i++;
+            while (i < lines.length && !/^```/.test(lines[i])) {
+              buf.push(lines[i]);
+              i++;
             }
-            html += "</tr>";
-          }
-          html += "</tbody>";
-        }
-        html += "</table></div>";
-        out.push(html);
-        continue;
-      }
-      const mark = listMark(line);
-      if (mark) {
-        flushPara();
-        const cursor = { i };
-        out.push(renderList(cursor, mark.indent, 0));
-        i = cursor.i;
-        continue;
-      }
-      if (!line.trim()) {
-        flushPara();
-        i++;
-        continue;
-      }
-      para.push(line);
-      i++;
-    }
-    flushPara();
-    return out.join("");
-  }
-
-  // src/app.ts
-  var LEVELS = [
-    { level: 0, name: "\u5173\u95ED", desc: "\u4E0D\u542F\u7528\u601D\u8003\uFF0C\u54CD\u5E94\u6700\u5FEB" },
-    { level: 1, name: "\u4F4E", desc: "\u7B80\u77ED\u601D\u8003\uFF0C\u9002\u5408\u65E5\u5E38\u95EE\u7B54" },
-    { level: 2, name: "\u4E2D", desc: "\u6DF1\u5EA6\u4E0E\u901F\u5EA6\u5E73\u8861" },
-    { level: 3, name: "\u9AD8", desc: "\u5145\u5206\u63A8\u7406\uFF0C\u590D\u6742\u4EFB\u52A1" }
-  ];
-  var LEVEL_API = ["", "low", "medium", "high"];
-  var THINK_BUDGET = [1024, 4096, 16384];
-  var PROVIDERS = {
-    openai: { label: "OpenAI", base: "https://api.openai.com/v1" },
-    deepseek: { label: "DeepSeek", base: "https://api.deepseek.com/v1" },
-    bailian: { label: "\u963F\u91CC\u4E91\u767E\u70BC", base: "https://dashscope.aliyuncs.com/compatible-mode/v1" },
-    custom: { label: "\u81EA\u5B9A\u4E49", base: "" }
-  };
-  function $(id) {
-    return document.getElementById(id);
-  }
-  function el(tag, cls, text) {
-    const node = document.createElement(tag);
-    if (cls) {
-      node.className = cls;
-    }
-    if (text != null) {
-      node.textContent = text;
-    }
-    return node;
-  }
-  function uid() {
-    return "m" + Date.now().toString(36) + Math.random().toString(36).slice(2, 7);
-  }
-  function scrubToolLeak(text) {
-    let out = text;
-    out = out.replace(/<\/?tool_call[^>]*>/gi, "");
-    out = out.replace(/<\/?function_call[^>]*>/gi, "");
-    out = out.replace(/\{\s*"query"\s*:\s*"[^"]*"\s*\}/g, "");
-    out = out.replace(/\{\s*"search_query"\s*:\s*"[^"]*"\s*\}/g, "");
-    return out;
-  }
-  function formatBytes(bytes) {
-    if (!bytes) {
-      return "\u56FE\u7247";
-    }
-    if (bytes < 1024 * 1024) {
-      return Math.max(1, Math.round(bytes / 1024)) + " KB";
-    }
-    return (bytes / 1024 / 1024).toFixed(1) + " MB";
-  }
-  function pad2(n) {
-    return (n < 10 ? "0" : "") + n;
-  }
-  var App = class {
-    constructor(bridge) {
-      this.config = {};
-      this.messages = [];
-      this.sessions = [];
-      this.currentId = "";
-      this.openRowId = "";
-      this.buildInfo = "";
-      this.requestId = "";
-      this.streaming = false;
-      this.attach = null;
-      this.modelsOpenAfter = false;
-      this.saveTimer = 0;
-      this.ignoreNextConfig = false;
-      this.renderTimer = 0;
-      this.cleanups = [];
-      this.toastTimer = 0;
-      this.bridge = bridge;
-    }
-    init() {
-      return __async(this, null, function* () {
-        this.cacheNodes();
-        this.bindEvents();
-        this.bindBridge();
-        const ready = yield new Promise((resolve) => {
-          const timer = window.setTimeout(() => resolve(null), 6e3);
-          this.bridge.on("ready", (m) => {
-            window.clearTimeout(timer);
-            resolve(m);
-          });
-        });
-        const build = ready && ready.build ? String(ready.build) : "unknown";
-        this.setBuildInfo(build);
-        try {
-          const cfg = yield this.bridge.request("config.get", void 0, "config", 8e3);
-          this.config = this.normalizeConfig(cfg.config || {});
-        } catch (e) {
-          this.config = this.normalizeConfig({});
-        }
-        this.applyConfig();
-        try {
-          const store = yield this.bridge.request("store.load", void 0, "store", 8e3);
-          this.loadSessions(store.data || {});
-        } catch (e) {
-          this.loadSessions({});
-        }
-        this.renderAll();
-      });
-    }
-    /* ------------------------------------------------------------- setup -- */
-    cacheNodes() {
-      this.app = $("app");
-      this.heroComposer = $("heroComposer");
-      this.composer = $("composer");
-      this.dock = $("dock");
-      this.dockHost = $("dockHost");
-      this.thread = $("thread");
-      this.threadInner = $("threadInner");
-      this.input = $("chatInput");
-      this.sendBtn = $("sendBtn");
-      this.attachRow = $("attachRow");
-      this.attachThumb = $("attachThumb");
-      this.attachName = $("attachName");
-      this.modelChipName = $("modelChipName");
-      this.thinkChip = $("thinkChip");
-      this.thinkLabel = $("thinkLabel");
-      this.modelList = $("modelList");
-      this.modelCount = $("modelCount");
-      this.thinkList = $("thinkList");
-      this.toastEl = $("toast");
-      this.drawerLayer = $("drawerLayer");
-      this.drawerScrim = $("drawerScrim");
-      this.sessionList = $("sessionList");
-    }
-    on(node, ev, fn) {
-      if (!node) {
-        return;
-      }
-      node.addEventListener(ev, fn, false);
-      this.cleanups.push(() => node.removeEventListener(ev, fn, false));
-    }
-    bindEvents() {
-      this.on($("settingsBtn"), "click", () => this.openSettings());
-      this.on($("searchChip"), "click", () => this.toggleSearch());
-      this.bindSearchFields();
-      this.on($("settingsClose"), "click", () => this.closeOverlay($("settingsOverlay")));
-      this.on($("newChatBtn"), "click", () => this.newChat());
-      this.on($("plusBtn"), "click", () => this.pickImage());
-      this.on($("attachRemove"), "click", () => this.clearAttach());
-      this.on($("modelChip"), "click", () => this.openModels());
-      this.on($("modelClose"), "click", () => this.closeOverlay($("modelOverlay")));
-      this.on($("thinkChip"), "click", () => this.openThink());
-      this.on($("thinkClose"), "click", () => this.closeOverlay($("thinkOverlay")));
-      this.on($("sendBtn"), "click", () => this.streaming ? this.stop() : this.send());
-      this.on(this.input, "input", () => {
-        this.autogrow();
-        this.refreshSendState();
-      });
-      this.on(this.input, "keydown", (e) => {
-        if (e.key === "Enter" && (e.metaKey || e.ctrlKey) && !e.isComposing) {
-          e.preventDefault();
-          if (!this.streaming) {
-            this.send();
-          }
-        }
-      });
-      this.on(this.input, "focus", () => this.composer.classList.add("is-focused"));
-      this.on(this.input, "blur", () => this.composer.classList.remove("is-focused"));
-      ["settingsOverlay", "modelOverlay", "thinkOverlay"].forEach((id) => {
-        const ov = $(id);
-        this.on(ov, "click", (e) => {
-          if (e.target === ov) {
-            this.closeOverlay(ov);
-          }
-        });
-      });
-      this.on($("fontDec"), "click", () => this.changeFont(-1));
-      this.on($("fontInc"), "click", () => this.changeFont(1));
-      this.on($("providerSelect"), "change", () => {
-        const key = $("providerSelect").value;
-        const preset = PROVIDERS[key];
-        if (preset && preset.base) {
-          $("apiUrl").value = preset.base;
-        }
-        this.saveSettings();
-      });
-      this.on($("apiUrl"), "change", () => this.saveSettings());
-      this.on($("apiPort"), "change", () => this.saveSettings());
-      this.on($("apiKey"), "change", () => this.saveSettings());
-      this.on($("refreshModelsBtn"), "click", () => this.fetchModels());
-      this.on($("thinkParamSelect"), "change", () => {
-        this.config.thinking.mode = $("thinkParamSelect").value;
-        this.updateThinkParamNote();
-        this.saveConfig();
-      });
-      this.on($("clearChatBtn"), "click", () => this.clearAll());
-      this.on($("menuBtn"), "click", () => this.openDrawer());
-      this.on($("drawerClose"), "click", () => this.closeDrawer());
-      this.on(this.drawerScrim, "click", () => this.closeDrawer());
-      this.on($("drawerNew"), "click", () => this.newChat());
-      this.on(this.sessionList, "click", (e) => {
-        const target = e.target;
-        const row = target.closest ? target.closest(".session-row") : null;
-        if (!row) {
-          this.setOpenRow("");
-          return;
-        }
-        const id = row.getAttribute("data-id") || "";
-        if (!id) {
-          return;
-        }
-        if (target.closest && target.closest(".session-act")) {
-          if (target.closest(".is-danger")) {
-            this.deleteSession(id);
-          } else {
-            this.startRename(row, id);
-          }
-          return;
-        }
-        if (target.closest && target.closest(".session-content")) {
-          if (this.openRowId === id) {
-            this.setOpenRow("");
-            return;
-          }
-          this.switchSession(id);
-        }
-      });
-      this.on(window, "keydown", (e) => {
-        if (e.key === "Escape" && this.drawerLayer.classList.contains("is-open")) {
-          this.closeDrawer();
-        }
-      });
-      this.on(window, "resize", () => this.scrollToBottom(true));
-    }
-    bindBridge() {
-      this.bridge.on("delta", (m) => {
-        if (m.requestId === this.requestId) {
-          this.appendDelta(String(m.text || ""));
-        }
-      });
-      this.bridge.on("reasoning", (m) => {
-        if (m.requestId === this.requestId) {
-          this.appendReasoning(String(m.text || ""));
-        }
-      });
-      this.bridge.on("searching", (m) => {
-        if (m.requestId === this.requestId) {
-          this.showSearching();
-        }
-      });
-      this.bridge.on("done", (m) => {
-        if (m.requestId === this.requestId) {
-          this.finish(true);
-        }
-      });
-      this.bridge.on("error", (m) => {
-        const ctx = String(m.context || "");
-        if (ctx === "models") {
-          this.resetModelsBtn();
-          this.toast(String(m.message || "\u5237\u65B0\u6A21\u578B\u5931\u8D25"));
-          return;
-        }
-        if (ctx === "image") {
-          this.toast(String(m.message || "\u56FE\u7247\u5904\u7406\u5931\u8D25"));
-          return;
-        }
-        if (!m.requestId || m.requestId === this.requestId) {
-          this.fail(String(m.message || "\u8BF7\u6C42\u5931\u8D25"));
-        }
-      });
-      this.bridge.on("aborted", (m) => {
-        if (m.requestId === this.requestId) {
-          this.finish(false);
-        }
-      });
-      this.bridge.on("keyboard", (m) => {
-        document.documentElement.style.setProperty("--kb", "0px");
-        this.scrollToBottom(true);
-      });
-      this.bridge.on("sources", (m) => this.renderSources(m.items));
-      this.bridge.on("image", (m) => this.receiveImage(m));
-      this.bridge.on("models", (m) => this.receiveModels(m));
-      this.bridge.on("config", (m) => {
-        const echo = this.ignoreNextConfig;
-        this.ignoreNextConfig = false;
-        this.config = this.normalizeConfig(m.config || this.config);
-        if (echo) {
-          this.updateSearchChip();
-          this.updateThinkChip();
-          this.modelChipName.textContent = this.config.model || "\u6A21\u578B";
-          return;
-        }
-        this.applyConfig();
-      });
-      this.bridge.on("ok", (m) => {
-        if (m.op === "store.clear") {
-          this.toast("\u5DF2\u6E05\u7A7A");
-        }
-      });
-    }
-    /* ------------------------------------------------------------- config -- */
-    normalizeConfig(cfg) {
-      const out = {
-        provider: cfg.provider || "DeepSeek",
-        baseUrl: cfg.baseUrl || "https://api.deepseek.com/v1",
-        port: Number(cfg.port) || 443,
-        apiKey: cfg.apiKey || "",
-        model: cfg.model || "deepseek-chat",
-        models: Array.isArray(cfg.models) ? cfg.models.slice() : [],
-        fontSize: Number(cfg.fontSize) || 16,
-        search: {
-          mode: cfg.search && cfg.search.mode || (cfg.search && cfg.search.enabled ? "force" : "off"),
-          url: cfg.search && cfg.search.url || "",
-          key: cfg.search && cfg.search.key || "",
-          header: cfg.search && cfg.search.header || "Authorization",
-          prefix: cfg.search && cfg.search.prefix || "Bearer ",
-          body: cfg.search && cfg.search.body || '{"query":"{{query}}","num_results":{{num}}}',
-          num: Number(cfg.search && cfg.search.num || 5)
-        },
-        thinking: {
-          level: Number(cfg.thinking && cfg.thinking.level || 0),
-          mode: cfg.thinking && cfg.thinking.mode || "auto",
-          param: cfg.thinking && cfg.thinking.param || "reasoning_effort",
-          enabled: !!(cfg.thinking && cfg.thinking.enabled)
-        }
-      };
-      return out;
-    }
-    applyConfig() {
-      document.documentElement.style.setProperty("--msg-size", this.config.fontSize + "px");
-      this.modelChipName.textContent = this.config.model || "\u6A21\u578B";
-      this.updateThinkChip();
-      $("fontSizeValue").textContent = String(this.config.fontSize);
-      const providerKey = this.providerKey(this.config.baseUrl);
-      $("providerSelect").value = providerKey;
-      $("apiUrl").value = this.config.baseUrl || "";
-      $("apiPort").value = String(this.config.port || 443);
-      $("apiKey").value = this.config.apiKey || "";
-      const mode = this.config.thinking && this.config.thinking.mode || "auto";
-      $("thinkParamSelect").value = mode;
-      this.updateThinkParamNote();
-      const search = this.config.search || {};
-      $("searchUrl").value = search.url || "";
-      $("searchKey").value = search.key || "";
-      $("searchHeader").value = search.header || "Authorization";
-      $("searchPrefix").value = search.prefix || "Bearer ";
-      $("searchBody").value = search.body || '{"query":"{{query}}","num_results":{{num}}}';
-      $("searchNum").value = String(search.num || 5);
-      this.updateSearchChip();
-    }
-    searchMode() {
-      return this.config.search && this.config.search.mode || "off";
-    }
-    updateSearchChip() {
-      const chip = $("searchChip");
-      const label = $("searchLabel");
-      const mode = this.searchMode();
-      chip.classList.remove("is-on", "is-force");
-      if (mode === "auto") {
-        chip.classList.add("is-on");
-        label.textContent = "\u8054\u7F51 \xB7 \u81EA\u52A8";
-      } else if (mode === "force") {
-        chip.classList.add("is-on", "is-force");
-        label.textContent = "\u8054\u7F51 \xB7 \u5F3A\u5236";
-      } else {
-        label.textContent = "\u8054\u7F51";
-      }
-      chip.setAttribute("aria-pressed", mode === "off" ? "false" : "true");
-    }
-    toggleSearch() {
-      if (!this.config.search) {
-        this.config.search = { url: "", key: "", header: "Authorization", prefix: "Bearer " };
-      }
-      const mode = this.searchMode();
-      const next = mode === "off" ? "auto" : mode === "auto" ? "force" : "off";
-      this.config.search.mode = next;
-      if (next !== "off" && !this.config.search.url) {
-        this.toast("\u5148\u5728\u8BBE\u7F6E\u91CC\u586B\u8054\u7F51\u641C\u7D22 API \u5730\u5740");
-      }
-      this.updateSearchChip();
-      this.saveConfig();
-    }
-    bindSearchFields() {
-      const map = [
-        ["searchUrl", "url"],
-        ["searchKey", "key"],
-        ["searchHeader", "header"],
-        ["searchPrefix", "prefix"],
-        ["searchBody", "body"]
-      ];
-      map.forEach((pair) => {
-        const node = $(pair[0]);
-        if (!node) {
-          return;
-        }
-        this.on(node, "change", () => {
-          if (!this.config.search) {
-            this.config.search = { enabled: false };
-          }
-          this.config.search[pair[1]] = node.value;
-          this.saveConfig();
-        });
-      });
-      this.on($("searchNum"), "change", () => {
-        if (!this.config.search) {
-          this.config.search = { enabled: false };
-        }
-        this.config.search.num = Number($("searchNum").value) || 5;
-        this.saveConfig();
-      });
-    }
-    providerKey(baseUrl) {
-      const url = String(baseUrl || "");
-      if (url.indexOf("deepseek") >= 0) {
-        return "deepseek";
-      }
-      if (url.indexOf("dashscope") >= 0) {
-        return "bailian";
-      }
-      if (url.indexOf("openai.com") >= 0) {
-        return "openai";
-      }
-      return url ? "custom" : "deepseek";
-    }
-    saveConfig() {
-      if (this.saveTimer) {
-        window.clearTimeout(this.saveTimer);
-      }
-      this.ignoreNextConfig = true;
-      const self = this;
-      this.saveTimer = window.setTimeout(function() {
-        self.saveTimer = 0;
-        self.bridge.post("config.set", { config: self.config });
-      }, 400);
-    }
-    changeFont(delta) {
-      const next = Math.min(22, Math.max(14, (Number(this.config.fontSize) || 16) + delta));
-      this.config.fontSize = next;
-      document.documentElement.style.setProperty("--msg-size", next + "px");
-      $("fontSizeValue").textContent = String(next);
-      this.saveConfig();
-    }
-    saveSettings() {
-      const providerKey = $("providerSelect").value;
-      const preset = PROVIDERS[providerKey];
-      this.config.provider = preset ? preset.label : this.config.provider;
-      this.config.baseUrl = String($("apiUrl").value || "").trim();
-      this.config.port = Number($("apiPort").value) || 443;
-      this.config.apiKey = String($("apiKey").value || "").trim();
-      this.saveConfig();
-    }
-    /* ------------------------------------------------------------- think -- */
-    thinkingMode() {
-      const mode = this.config.thinking && this.config.thinking.mode;
-      return typeof mode === "string" && mode ? mode : "auto";
-    }
-    // Turning thinking OFF has to be explicit: qwen-style gateways default to
-    // "thinking on", so sending no parameter keeps reasoning enabled no matter
-    // what the chip says.
-    thinkingOffPayload() {
-      const mode = this.thinkingMode();
-      const model = String(this.config.model || "");
-      const base = String(this.config.baseUrl || "");
-      const qwenFamily = /qwen|qwq|qianwen|dashscope|aliyun|bailian/i.test(base) || /qwen|qwq/i.test(model);
-      if (mode === "enable_thinking" || mode === "thinking_budget" || qwenFamily) {
-        return { enable_thinking: false };
-      }
-      return null;
-    }
-    thinkingPayload() {
-      const level = Number(this.config.thinking.level) || 0;
-      if (level <= 0) {
-        const off = this.thinkingOffPayload();
-        if (off) {
-          return { enabled: true, level: 0, params: off };
-        }
-        return { enabled: false, level: 0, params: {} };
-      }
-      const mode = this.thinkingMode();
-      if (mode === "off") {
-        return { enabled: false, level, params: {} };
-      }
-      const budget = THINK_BUDGET[level - 1] || 4096;
-      if (mode === "enable_thinking") {
-        return { enabled: true, level, params: { enable_thinking: true, thinking_budget: budget } };
-      }
-      if (mode === "thinking_budget") {
-        return { enabled: true, level, params: { thinking_budget: budget } };
-      }
-      if (mode === "reasoning_effort") {
-        return { enabled: true, level, params: { reasoning_effort: LEVEL_API[level] } };
-      }
-      const model = String(this.config.model || "");
-      if (/reasoner|r1|thinking|-think/i.test(model)) {
-        return { enabled: false, level, params: {} };
-      }
-      if (this.providerKey(this.config.baseUrl) === "bailian" || /qwen|qwq/i.test(model)) {
-        return { enabled: true, level, params: { enable_thinking: true, thinking_budget: budget } };
-      }
-      return { enabled: true, level, params: { reasoning_effort: LEVEL_API[level] } };
-    }
-    updateThinkParamNote() {
-      const note = $("thinkParamNote");
-      if (!note) {
-        return;
-      }
-      const payload = this.thinkingPayload();
-      if (!payload.enabled) {
-        note.textContent = "\u5F53\u524D\u8BBE\u7F6E\u4E0D\u4F1A\u53D1\u9001\u601D\u8003\u53C2\u6570\uFF08\u6A21\u578B\u81EA\u8EAB\u601D\u8003\u6216\u5DF2\u5173\u95ED\u6863\u4F4D\uFF09";
-        return;
-      }
-      const parts = [];
-      for (const key in payload.params) {
-        if (Object.prototype.hasOwnProperty.call(payload.params, key)) {
-          parts.push(key + " = " + String(payload.params[key]));
-        }
-      }
-      note.textContent = "\u672C\u6B21\u8BF7\u6C42\u4F1A\u5E26\u4E0A\uFF1A" + parts.join("\uFF0C");
-    }
-    updateThinkChip() {
-      const level = Number(this.config.thinking.level) || 0;
-      this.config.thinking.enabled = level > 0;
-      if (level > 0) {
-        this.thinkChip.classList.add("is-on");
-        this.thinkChip.setAttribute("aria-pressed", "true");
-        this.thinkLabel.textContent = "\u601D\u8003 \xB7 " + LEVELS[level].name;
-      } else {
-        this.thinkChip.classList.remove("is-on");
-        this.thinkChip.setAttribute("aria-pressed", "false");
-        this.thinkLabel.textContent = "\u601D\u8003";
-      }
-      this.updateThinkParamNote();
-    }
-    renderThinkList() {
-      const level = Number(this.config.thinking.level) || 0;
-      this.thinkList.innerHTML = "";
-      for (let i = 0; i < LEVELS.length; i++) {
-        const lv = LEVELS[i];
-        const item = el("button", "model-item" + (lv.level === level ? " is-selected" : ""));
-        item.type = "button";
-        item.appendChild(el("span", "model-name", lv.name));
-        item.appendChild(el("span", "model-desc", lv.desc));
-        item.appendChild(el("span", "model-check", "\u2713"));
-        this.on(item, "click", () => {
-          this.config.thinking.level = lv.level;
-          this.updateThinkChip();
-          this.saveConfig();
-          this.closeOverlay($("thinkOverlay"));
-          this.toast(lv.level ? "\u601D\u8003\u6863\u4F4D\uFF1A" + lv.name : "\u5DF2\u5173\u95ED\u601D\u8003");
-        });
-        this.thinkList.appendChild(item);
-      }
-    }
-    openThink() {
-      this.renderThinkList();
-      this.openOverlay($("thinkOverlay"));
-    }
-    /* ------------------------------------------------------------- models -- */
-    openModels() {
-      if (!this.config.models || !this.config.models.length) {
-        this.fetchModels(true);
-      } else {
-        this.renderModelList();
-        this.openOverlay($("modelOverlay"));
-      }
-    }
-    renderModelList() {
-      const list = this.config.models || [];
-      this.modelList.innerHTML = "";
-      for (let i = 0; i < list.length; i++) {
-        const name = list[i];
-        const item = el("button", "model-item" + (name === this.config.model ? " is-selected" : ""));
-        item.type = "button";
-        item.appendChild(el("span", "model-name", name));
-        item.appendChild(el("span", "model-desc", name === this.config.model ? "\u5F53\u524D\u6A21\u578B" : ""));
-        item.appendChild(el("span", "model-check", "\u2713"));
-        this.on(item, "click", () => {
-          this.config.model = name;
-          this.modelChipName.textContent = name;
-          this.saveConfig();
-          this.closeOverlay($("modelOverlay"));
-          this.toast("\u5DF2\u5207\u6362\uFF1A" + name);
-        });
-        this.modelList.appendChild(item);
-      }
-      this.modelCount.textContent = list.length + " \u4E2A\u6A21\u578B";
-    }
-    fetchModels(openAfter) {
-      const refresh = $("refreshModelsBtn");
-      if (refresh) {
-        refresh.textContent = "\u5237\u65B0\u4E2D\u2026";
-      }
-      this.modelsOpenAfter = !!openAfter;
-      this.bridge.post("models.fetch");
-    }
-    resetModelsBtn() {
-      const refresh = $("refreshModelsBtn");
-      if (refresh) {
-        refresh.textContent = "\u5237\u65B0\u6A21\u578B\u5217\u8868";
-      }
-    }
-    receiveModels(m) {
-      this.resetModelsBtn();
-      const list = Array.isArray(m.models) ? m.models.filter((x) => typeof x === "string" && x) : [];
-      if (!list.length) {
-        this.toast("\u6CA1\u62FF\u5230\u6A21\u578B\u5217\u8868");
-        return;
-      }
-      this.config.models = list;
-      if (list.indexOf(this.config.model) < 0) {
-        this.config.model = list[0];
-        this.modelChipName.textContent = this.config.model;
-      }
-      this.saveConfig();
-      this.renderModelList();
-      this.toast("\u6A21\u578B\u5DF2\u66F4\u65B0\uFF08" + list.length + "\uFF09");
-      if (this.modelsOpenAfter) {
-        this.modelsOpenAfter = false;
-        this.openOverlay($("modelOverlay"));
-      }
-    }
-    /* ------------------------------------------------------------- images -- */
-    pickImage() {
-      this.bridge.post("image.pick", { source: "library" });
-    }
-    receiveImage(m) {
-      const img = m && m.image && typeof m.image === "object" ? m.image : m;
-      if (!img || !img.dataBase64) {
-        return;
-      }
-      this.attach = {
-        dataBase64: String(img.dataBase64),
-        mime: String(img.mime || "image/jpeg"),
-        bytes: Number(img.bytes) || 0
-      };
-      this.attachThumb.src = "data:" + this.attach.mime + ";base64," + this.attach.dataBase64;
-      const w = Number(img.width) || 0;
-      const h = Number(img.height) || 0;
-      this.attachName.textContent = w && h ? w + " \xD7 " + h : formatBytes(this.attach.bytes || 0);
-      this.composer.classList.add("has-attach");
-      this.attachRow.classList.add("is-open");
-      this.composer.classList.add("is-stacked");
-      this.makeThumb("data:" + this.attach.mime + ";base64," + this.attach.dataBase64, 320, (thumb) => {
-        if (this.attach) {
-          this.attach.thumb = thumb;
-        }
-      });
-      this.refreshSendState();
-    }
-    makeThumb(src, max, done) {
-      const img = new Image();
-      img.onload = () => {
-        try {
-          const w0 = img.width || max;
-          const h0 = img.height || max;
-          const scale = Math.min(1, max / Math.max(w0, h0));
-          const w = Math.max(1, Math.round(w0 * scale));
-          const h = Math.max(1, Math.round(h0 * scale));
-          const canvas = document.createElement("canvas");
-          canvas.width = w;
-          canvas.height = h;
-          const ctx = canvas.getContext("2d");
-          if (!ctx) {
-            done("");
-            return;
-          }
-          ctx.drawImage(img, 0, 0, w, h);
-          const url = canvas.toDataURL("image/jpeg", 0.7);
-          done(String(url).split(",")[1] || "");
-        } catch (err) {
-          done("");
-        }
-      };
-      img.onerror = () => done("");
-      img.src = src;
-    }
-    clearAttach() {
-      this.attach = null;
-      this.composer.classList.remove("has-attach");
-      this.attachRow.classList.remove("is-open");
-      this.composer.classList.remove("is-stacked");
-      this.attachThumb.removeAttribute("src");
-      this.attachName.textContent = "";
-      this.refreshSendState();
-    }
-    /* -------------------------------------------------------------- chat -- */
-    autogrow() {
-      const ta = this.input;
-      ta.style.height = "auto";
-      const h = Math.min(ta.scrollHeight, 132);
-      ta.style.height = h + "px";
-    }
-    refreshSendState() {
-      const has = this.input.value.trim().length > 0 || !!this.attach;
-      if (this.streaming) {
-        this.sendBtn.removeAttribute("disabled");
-        this.sendBtn.classList.add("is-stop");
-        this.sendBtn.setAttribute("aria-label", "\u505C\u6B62\u751F\u6210");
-        return;
-      }
-      this.sendBtn.classList.remove("is-stop");
-      this.sendBtn.setAttribute("aria-label", "\u53D1\u9001");
-      if (has) {
-        this.sendBtn.removeAttribute("disabled");
-      } else {
-        this.sendBtn.setAttribute("disabled", "");
-      }
-    }
-    enterChat() {
-      if (this.app.classList.contains("chat")) {
-        return;
-      }
-      this.app.classList.add("chat");
-      this.dockHost.appendChild(this.composer);
-      this.scrollToBottom(true);
-    }
-    send() {
-      const text = this.input.value.trim();
-      if (!text && !this.attach) {
-        return;
-      }
-      const image = this.attach ? { dataBase64: this.attach.dataBase64, mime: this.attach.mime, thumb: this.attach.thumb || "" } : null;
-      const userMsg = { id: uid(), role: "user", content: text, image, ts: Date.now() };
-      this.messages.push(userMsg);
-      this.input.value = "";
-      this.autogrow();
-      this.clearAttach();
-      this.enterChat();
-      this.touchCurrent();
-      this.renderAll();
-      this.scrollToBottom(true);
-      this.saveStore();
-      this.requestId = uid();
-      this.streaming = true;
-      this.refreshSendState();
-      const assistant = { id: uid(), role: "assistant", content: "", ts: Date.now() };
-      this.messages.push(assistant);
-      this.appendMessageEl(assistant, true);
-      this.scrollToBottom(true);
-      const thinking = this.thinkingPayload();
-      this.bridge.post("chat.start", {
-        requestId: this.requestId,
-        config: this.config,
-        messages: this.historyForApi(),
-        image,
-        thinking,
-        search: { mode: this.searchMode() }
-      });
-    }
-    stop() {
-      if (!this.streaming) {
-        return;
-      }
-      this.bridge.post("chat.stop", { requestId: this.requestId });
-    }
-    historyForApi() {
-      const out = [];
-      for (let i = 0; i < this.messages.length; i++) {
-        const m = this.messages[i];
-        if (m.error) {
-          continue;
-        }
-        if (m.role === "assistant" && !m.content && this.streaming && i === this.messages.length - 1) {
-          continue;
-        }
-        if (m.content) {
-          out.push({ role: m.role, content: m.content });
-        }
-      }
-      return out;
-    }
-    appendDelta(chunk) {
-      const last = this.messages[this.messages.length - 1];
-      if (!last || last.role !== "assistant") {
-        return;
-      }
-      last.content = scrubToolLeak(last.content + chunk);
-      const wrap = this.threadInner.querySelector('[data-id="' + last.id + '"]');
-      if (wrap && wrap.classList.contains("thinking")) {
-        wrap.classList.remove("thinking");
-        wrap.classList.add("is-streaming");
-        const placeholder = wrap.querySelector(".thinking-body");
-        if (placeholder && placeholder.parentNode) {
-          placeholder.parentNode.removeChild(placeholder);
-        }
-        if (!wrap.querySelector(".ai-body")) {
-          wrap.appendChild(el("div", "ai-body"));
-        }
-      }
-      this.scheduleStreamRender(last);
-    }
-    showSearching() {
-      const last = this.messages[this.messages.length - 1];
-      if (!last || last.role !== "assistant") {
-        return;
-      }
-      const wrap = this.threadInner.querySelector('[data-id="' + last.id + '"]');
-      if (!wrap) {
-        return;
-      }
-      const label = wrap.querySelector(".thinking-label");
-      if (label) {
-        label.textContent = "\u6B63\u5728\u8054\u7F51\u641C\u7D22\u2026";
-      }
-      this.scrollToBottom(false);
-    }
-    appendReasoning(chunk) {
-      const last = this.messages[this.messages.length - 1];
-      if (!last || last.role !== "assistant") {
-        return;
-      }
-      last.reasoning = (last.reasoning || "") + chunk;
-      const wrap = this.threadInner.querySelector('[data-id="' + last.id + '"]');
-      if (!wrap) {
-        return;
-      }
-      const thinkingLabel = wrap.querySelector(".thinking-label");
-      if (thinkingLabel) {
-        thinkingLabel.textContent = "\u6B63\u5728\u601D\u8003\u2026";
-      }
-      let box = wrap.querySelector(".reasoning");
-      if (!box) {
-        box = el("div", "reasoning");
-        const head = el("div", "reasoning-head", "\u601D\u8003\u8FC7\u7A0B");
-        const body2 = el("div", "reasoning-body");
-        box.appendChild(head);
-        box.appendChild(body2);
-        const target = box;
-        this.on(head, "click", () => {
-          if (target.classList.contains("is-open")) {
-            target.classList.remove("is-open");
-          } else {
-            target.classList.add("is-open");
-          }
-        });
-        wrap.insertBefore(box, wrap.firstChild);
-      }
-      const body = box.querySelector(".reasoning-body");
-      if (body) {
-        body.textContent = last.reasoning;
-      }
-      this.scrollToBottom(false);
-    }
-    scheduleStreamRender(msg) {
-      if (this.renderTimer) {
-        return;
-      }
-      this.renderTimer = window.setTimeout(() => {
-        this.renderTimer = 0;
-        const node = this.threadInner.querySelector('[data-id="' + msg.id + '"] .ai-body');
-        if (node) {
-          node.innerHTML = renderMarkdown(msg.content);
-          this.scrollToBottom(false);
-        }
-      }, 120);
-    }
-    finish(ok) {
-      if (!this.streaming) {
-        return;
-      }
-      this.streaming = false;
-      this.refreshSendState();
-      const last = this.messages[this.messages.length - 1];
-      if (last && last.role === "assistant") {
-        const node = this.threadInner.querySelector('[data-id="' + last.id + '"]');
-        if (node) {
-          node.classList.remove("is-streaming");
-          const body = node.querySelector(".ai-body");
-          if (body) {
-            body.innerHTML = renderMarkdown(last.content || (ok ? "" : "\uFF08\u5DF2\u505C\u6B62\uFF09"));
-          }
-          const rbox = node.querySelector(".reasoning");
-          if (rbox) {
-            rbox.classList.remove("is-open");
-            rbox.classList.add("is-done");
-            const head = rbox.querySelector(".reasoning-head");
-            const chars = (last.reasoning || "").length;
-            if (head && chars) {
-              head.textContent = "\u601D\u8003\u8FC7\u7A0B \xB7 " + chars + " \u5B57\uFF08\u70B9\u6309\u5C55\u5F00\uFF09";
-            }
-          }
-        }
-        if (!last.content) {
-          last.content = ok ? "\uFF08\u7A7A\u56DE\u590D\uFF09" : "\uFF08\u5DF2\u505C\u6B62\uFF09";
-        }
-      }
-      this.touchCurrent();
-      this.saveStore();
-      this.scrollToBottom(true);
-    }
-    fail(message) {
-      this.streaming = false;
-      this.refreshSendState();
-      const last = this.messages[this.messages.length - 1];
-      const node = last ? this.threadInner.querySelector('[data-id="' + last.id + '"]') : null;
-      if (last && last.role === "assistant") {
-        last.content = last.content || "";
-        last.error = true;
-        this.messages.pop();
-        if (node && node.parentNode) {
-          node.parentNode.removeChild(node);
-        }
-      }
-      const box = el("div", "msg ai");
-      const body = el("div", "msg-error", message);
-      const retry = el("button", "retry-btn", "\u91CD\u8BD5");
-      retry.type = "button";
-      this.on(retry, "click", () => {
-        if (box.parentNode) {
-          box.parentNode.removeChild(box);
-        }
-        this.resendLast();
-      });
-      box.appendChild(body);
-      box.appendChild(retry);
-      this.threadInner.appendChild(box);
-      this.touchCurrent();
-      this.saveStore();
-      this.scrollToBottom(true);
-    }
-    resendLast() {
-      while (this.messages.length && this.messages[this.messages.length - 1].role === "assistant") {
-        this.messages.pop();
-      }
-      const last = this.messages[this.messages.length - 1];
-      if (!last || last.role !== "user") {
-        this.renderAll();
-        return;
-      }
-      const text = last.content;
-      this.messages.pop();
-      this.renderAll();
-      this.input.value = text;
-      this.autogrow();
-      this.refreshSendState();
-      this.send();
-    }
-    /* ------------------------------------------------------------- render -- */
-    renderAll() {
-      this.threadInner.innerHTML = "";
-      if (!this.messages.length) {
-        this.app.classList.remove("chat");
-        this.heroComposer.appendChild(this.composer);
-      } else {
-        this.enterChat();
-      }
-      for (let i = 0; i < this.messages.length; i++) {
-        const m = this.messages[i];
-        if (m.role === "assistant" && !m.content && i === this.messages.length - 1) {
-          this.appendMessageEl(m, true);
-        } else {
-          this.appendMessageEl(m, false);
-        }
-      }
-      this.refreshSendState();
-    }
-    renderSources(items) {
-      if (!Array.isArray(items) || !items.length) {
-        return;
-      }
-      const last = this.messages[this.messages.length - 1];
-      if (!last) {
-        return;
-      }
-      const wrap = this.threadInner.querySelector('[data-id="' + last.id + '"]');
-      if (!wrap) {
-        return;
-      }
-      const old = wrap.querySelector(".sources");
-      if (old) {
-        old.parentNode.removeChild(old);
-      }
-      const box = el("div", "sources");
-      box.appendChild(el("div", "sources-head", "\u6765\u6E90"));
-      const list = el("ol", "sources-list");
-      for (let i = 0; i < items.length; i++) {
-        const item = items[i] || {};
-        const li = el("li", "source-item");
-        const link = el("a", "source-link", String(item.title || item.url || "\u6765\u6E90"));
-        link.href = String(item.url || "");
-        link.setAttribute("target", "_blank");
-        link.setAttribute("rel", "noopener noreferrer");
-        li.appendChild(link);
-        if (item.url) {
-          const host = el("span", "source-host", String(item.url).replace(/^https?:\/\//, "").split("/")[0]);
-          li.appendChild(host);
-        }
-        list.appendChild(li);
-      }
-      box.appendChild(list);
-      wrap.appendChild(box);
-    }
-    appendMessageEl(msg, streaming) {
-      if (msg.role === "user") {
-        const wrap2 = el("div", "msg user");
-        wrap2.setAttribute("data-id", msg.id);
-        if (msg.image && (msg.image.thumb || msg.image.dataBase64)) {
-          const img = el("img", "bubble-img");
-          img.src = msg.image.thumb ? "data:image/jpeg;base64," + msg.image.thumb : "data:" + (msg.image.mime || "image/jpeg") + ";base64," + msg.image.dataBase64;
-          wrap2.appendChild(img);
-        }
-        if (msg.content) {
-          wrap2.appendChild(el("div", "bubble", msg.content));
-        }
-        this.threadInner.appendChild(wrap2);
-        return;
-      }
-      const wrap = el("div", "msg ai" + (streaming && !msg.content ? " thinking" : ""));
-      wrap.setAttribute("data-id", msg.id);
-      const body = el("div", "ai-body");
-      if (streaming && !msg.content) {
-        const dots = el("span", "thinking-dots");
-        dots.appendChild(el("i"));
-        dots.appendChild(el("i"));
-        dots.appendChild(el("i"));
-        const label = el("span", "thinking-label", "\u6B63\u5728\u601D\u8003\u2026");
-        const row = el("div", "thinking-body");
-        row.appendChild(dots);
-        row.appendChild(label);
-        wrap.appendChild(row);
-        this.threadInner.appendChild(wrap);
-        return;
-      }
-      body.innerHTML = renderMarkdown(msg.content || "");
-      wrap.appendChild(body);
-      this.threadInner.appendChild(wrap);
-    }
-    scrollToBottom(force) {
-      const node = this.thread;
-      if (!node) {
-        return;
-      }
-      const nearBottom = node.scrollHeight - node.scrollTop - node.clientHeight < 120;
-      if (force || nearBottom) {
-        node.scrollTop = node.scrollHeight;
-      }
-    }
-    /* -------------------------------------------------------------- store -- */
-    saveStore() {
-      if (this.saveTimer) {
-        window.clearTimeout(this.saveTimer);
-      }
-      this.saveTimer = window.setTimeout(() => {
-        this.saveTimer = 0;
-        const sessions = this.sessions.map((s) => ({
-          id: s.id,
-          title: s.title,
-          createdAt: s.createdAt,
-          updatedAt: s.updatedAt,
-          messages: s.messages.slice(-120).map((m) => ({
-            id: m.id,
-            role: m.role,
-            content: m.content,
-            image: m.image && m.image.thumb ? { mime: m.image.mime || "image/jpeg", thumb: m.image.thumb } : null,
-            ts: m.ts || 0
-          }))
-        }));
-        this.bridge.post("store.save", { data: { v: 2, sessions, currentId: this.currentId } });
-      }, 700);
-    }
-    /* ----------------------------------------------------------- sessions -- */
-    current() {
-      for (let i = 0; i < this.sessions.length; i++) {
-        if (this.sessions[i].id === this.currentId) {
-          return this.sessions[i];
-        }
-      }
-      return this.sessions.length ? this.sessions[0] : null;
-    }
-    makeSession(messages) {
-      const now = Date.now();
-      return {
-        id: "s" + now.toString(36) + Math.random().toString(36).slice(2, 6),
-        title: this.titleFor(messages),
-        createdAt: now,
-        updatedAt: now,
-        messages
-      };
-    }
-    normalizeMessages(list) {
-      return (Array.isArray(list) ? list : []).filter((m) => m && (m.role === "user" || m.role === "assistant") && typeof m.content === "string").map((m) => {
-        const raw = m.image && typeof m.image === "object" ? m.image : null;
-        const thumb = raw && typeof raw.thumb === "string" ? raw.thumb : "";
-        const data = raw && typeof raw.dataBase64 === "string" ? raw.dataBase64 : "";
-        const image = raw && (thumb || data) ? { mime: String(raw.mime || "image/jpeg"), thumb, dataBase64: data } : null;
-        return { id: m.id || uid(), role: m.role, content: m.content, image, ts: m.ts || 0 };
-      });
-    }
-    loadSessions(data) {
-      const raw = Array.isArray(data.sessions) ? data.sessions : null;
-      const loaded = [];
-      if (raw) {
-        for (let i = 0; i < raw.length; i++) {
-          const s = raw[i];
-          if (!s || typeof s !== "object") {
+            i++;
+            out.push("<pre><code" + (lang ? ' class="lang-' + esc(lang) + '"' : "") + ">" + esc(buf.join("\n")) + "</code></pre>");
             continue;
           }
-          const msgs = this.normalizeMessages(s.messages || []);
-          const now = Date.now();
-          loaded.push({
-            id: typeof s.id === "string" && s.id ? s.id : "s" + now.toString(36) + i,
-            title: typeof s.title === "string" && s.title ? s.title : this.titleFor(msgs),
-            createdAt: Number(s.createdAt) || now,
-            updatedAt: Number(s.updatedAt) || now,
-            messages: msgs
+          var h = line.match(/^(#{1,6})\s+(.*)$/);
+          if (h) {
+            flushPara();
+            var level = Math.min(Math.max(h[1].length, 2), 4);
+            out.push("<h" + level + ">" + inline(h[2]) + "</h" + level + ">");
+            i++;
+            continue;
+          }
+          if (/^[ \t]*(---|\*\*\*|___)\s*$/.test(line)) {
+            flushPara();
+            out.push("<hr>");
+            i++;
+            continue;
+          }
+          if (/^[ \t]*>\s?/.test(line)) {
+            flushPara();
+            var buf = [];
+            while (i < lines.length && /^[ \t]*>\s?/.test(lines[i])) {
+              buf.push(lines[i].replace(/^[ \t]*>\s?/, ""));
+              i++;
+            }
+            out.push("<blockquote>" + inline(buf.join("\n")).replace(/\n/g, "<br>") + "</blockquote>");
+            continue;
+          }
+          if (line.indexOf("|") >= 0 && i + 1 < lines.length && isTableSeparator(lines[i + 1])) {
+            flushPara();
+            var header = splitRow(line);
+            var aligns = splitRow(lines[i + 1]).map(tableAlign);
+            i += 2;
+            var rows = [];
+            while (i < lines.length) {
+              var row = lines[i];
+              if (!row.trim() || row.indexOf("|") < 0 || isTableSeparator(row)) {
+                break;
+              }
+              rows.push(splitRow(row));
+              i++;
+            }
+            var wide = header.length >= 4 ? " is-wide" : "";
+            var html = '<div class="table-wrap' + wide + '"><table><thead><tr>';
+            for (var c = 0; c < header.length; c++) {
+              var style = aligns[c] ? ' style="text-align:' + aligns[c] + '"' : "";
+              html += "<th" + style + ">" + inline(header[c]) + "</th>";
+            }
+            html += "</tr></thead>";
+            if (rows.length) {
+              html += "<tbody>";
+              for (var r = 0; r < rows.length; r++) {
+                html += "<tr>";
+                for (var c = 0; c < header.length; c++) {
+                  var style = aligns[c] ? ' style="text-align:' + aligns[c] + '"' : "";
+                  html += "<td" + style + ">" + inline(rows[r][c] || "") + "</td>";
+                }
+                html += "</tr>";
+              }
+              html += "</tbody>";
+            }
+            html += "</table></div>";
+            out.push(html);
+            continue;
+          }
+          var mark = listMark(line);
+          if (mark) {
+            flushPara();
+            var cursor = { i: i };
+            out.push(renderList(cursor, mark.indent, 0));
+            i = cursor.i;
+            continue;
+          }
+          if (!line.trim()) {
+            flushPara();
+            i++;
+            continue;
+          }
+          para.push(line);
+          i++;
+        }
+        flushPara();
+        return out.join("");
+      }
+    }
+  });
+
+  // .build/es5/app.js
+  var require_app = __commonJS({
+    ".build/es5/app.js": function(exports) {
+      "use strict";
+      var __awaiter = exports && exports.__awaiter || function(thisArg, _arguments, P, generator) {
+        function adopt(value) {
+          return value instanceof P ? value : new P(function(resolve) {
+            resolve(value);
           });
         }
-      } else {
-        const legacy = this.normalizeMessages(data.messages || []);
-        if (legacy.length) {
-          loaded.push(this.makeSession(legacy));
-        }
-      }
-      this.sessions = loaded.length ? loaded : [this.makeSession([])];
-      const wanted = typeof data.currentId === "string" ? data.currentId : "";
-      let active = this.sessions[0];
-      for (let i = 0; i < this.sessions.length; i++) {
-        if (this.sessions[i].id === wanted) {
-          active = this.sessions[i];
-        }
-      }
-      this.currentId = active.id;
-      this.messages = active.messages;
-    }
-    titleFor(messages) {
-      for (let i = 0; i < messages.length; i++) {
-        const m = messages[i];
-        if (m.role === "user" && m.content && m.content.trim()) {
-          const text = m.content.replace(/\s+/g, " ").trim();
-          return text.length > 22 ? text.slice(0, 22) + "\u2026" : text;
-        }
-      }
-      return "\u65B0\u5BF9\u8BDD";
-    }
-    touchCurrent() {
-      const s = this.current();
-      if (!s) {
-        return;
-      }
-      s.updatedAt = Date.now();
-      s.title = this.titleFor(s.messages);
-      if (this.drawerLayer && this.drawerLayer.classList.contains("is-open")) {
-        this.renderSessions();
-      }
-    }
-    sessionTime(ts) {
-      const d = new Date(ts || Date.now());
-      const now = /* @__PURE__ */ new Date();
-      const sameDay = (a, b) => a.getFullYear() === b.getFullYear() && a.getMonth() === b.getMonth() && a.getDate() === b.getDate();
-      if (sameDay(d, now)) {
-        return pad2(d.getHours()) + ":" + pad2(d.getMinutes());
-      }
-      const yesterday = new Date(now.getTime() - 864e5);
-      if (sameDay(d, yesterday)) {
-        return "\u6628\u5929";
-      }
-      if (d.getFullYear() === now.getFullYear()) {
-        return d.getMonth() + 1 + "\u6708" + d.getDate() + "\u65E5";
-      }
-      return d.getFullYear() + "/" + (d.getMonth() + 1) + "/" + d.getDate();
-    }
-    renderSessions() {
-      if (!this.sessionList) {
-        return;
-      }
-      this.sessionList.innerHTML = "";
-      const sorted = this.sessions.slice().sort((a, b) => (b.updatedAt || 0) - (a.updatedAt || 0));
-      let lastGroup = "";
-      for (let i = 0; i < sorted.length; i++) {
-        const s = sorted[i];
-        const group = this.groupFor(s.updatedAt);
-        if (group !== lastGroup) {
-          this.sessionList.appendChild(el("div", "session-group", group));
-          lastGroup = group;
-        }
-        const row = el("div", "session-row" + (s.id === this.currentId ? " is-active" : "") + (s.id === this.openRowId ? " is-open" : ""));
-        row.setAttribute("data-id", s.id);
-        const actions = el("div", "session-actions");
-        const rename = el("button", "session-act", "\u91CD\u547D\u540D");
-        rename.type = "button";
-        const del = el("button", "session-act is-danger", "\u5220\u9664");
-        del.type = "button";
-        actions.appendChild(rename);
-        actions.appendChild(del);
-        const content = el("button", "session-content");
-        content.type = "button";
-        content.appendChild(el("span", "session-title", s.title || "\u65B0\u5BF9\u8BDD"));
-        content.appendChild(el("span", "session-time", this.sessionTime(s.updatedAt)));
-        row.appendChild(actions);
-        row.appendChild(content);
-        this.sessionList.appendChild(row);
-        this.bindRowGesture(content, actions, s.id);
-      }
-    }
-    groupFor(ts) {
-      const value = ts || 0;
-      const now = /* @__PURE__ */ new Date();
-      const startOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime();
-      if (value >= startOfToday) {
-        return "\u4ECA\u5929";
-      }
-      if (value >= startOfToday - 6 * 864e5) {
-        return "\u8FD1 7 \u5929";
-      }
-      return "\u66F4\u65E9";
-    }
-    setOpenRow(id) {
-      this.openRowId = id;
-      if (!this.sessionList) {
-        return;
-      }
-      const rows = this.sessionList.querySelectorAll(".session-row");
-      for (let i = 0; i < rows.length; i++) {
-        const row = rows[i];
-        const rowId = row.getAttribute("data-id") || "";
-        if (!!id && rowId === id) {
-          row.classList.add("is-open");
-        } else {
-          row.classList.remove("is-open");
-        }
-        const content = row.querySelector(".session-content");
-        if (content) {
-          content.style.transform = "";
-        }
-      }
-    }
-    bindRowGesture(content, actions, id) {
-      const WIDTH = 136;
-      const THRESH = 30;
-      let startX = 0;
-      let startY = 0;
-      let dx = 0;
-      let dy = 0;
-      let active = false;
-      let moving = false;
-      let swiped = false;
-      const resetActions = () => {
-        actions.style.transition = "";
-        actions.style.transform = "";
-        actions.style.opacity = "";
-      };
-      const begin = (x, y) => {
-        startX = x;
-        startY = y;
-        dx = 0;
-        dy = 0;
-        active = true;
-        moving = false;
-        swiped = false;
-      };
-      const move = (x, y) => {
-        if (!active) {
-          return;
-        }
-        dx = x - startX;
-        dy = y - startY;
-        if (!moving && Math.abs(dy) > 10 && Math.abs(dy) > Math.abs(dx)) {
-          active = false;
-          resetActions();
-          return;
-        }
-        if (!moving && Math.abs(dx) > 6) {
-          moving = true;
-        }
-        if (moving) {
-          const base = this.openRowId === id ? -WIDTH : 0;
-          const offset = Math.min(0, Math.max(-WIDTH, base + dx));
-          const reveal = -offset;
-          actions.style.transition = "none";
-          actions.style.transform = "translateX(" + (WIDTH - reveal) + "px)";
-          actions.style.opacity = String(Math.min(1, reveal / WIDTH));
-        }
-      };
-      const end = () => {
-        if (!active) {
-          return;
-        }
-        active = false;
-        resetActions();
-        if (moving && Math.abs(dx) > 8) {
-          swiped = true;
-          if (dx < -THRESH) {
-            this.setOpenRow(id);
-          } else if (dx > THRESH) {
-            this.setOpenRow("");
-          } else {
-            this.setOpenRow(this.openRowId === id ? "" : id);
+        return new (P || (P = Promise))(function(resolve, reject) {
+          function fulfilled(value) {
+            try {
+              step(generator.next(value));
+            } catch (e) {
+              reject(e);
+            }
           }
+          function rejected(value) {
+            try {
+              step(generator["throw"](value));
+            } catch (e) {
+              reject(e);
+            }
+          }
+          function step(result) {
+            result.done ? resolve(result.value) : adopt(result.value).then(fulfilled, rejected);
+          }
+          step((generator = generator.apply(thisArg, _arguments || [])).next());
+        });
+      };
+      var __generator = exports && exports.__generator || function(thisArg, body) {
+        var _ = { label: 0, sent: function() {
+          if (t[0] & 1) throw t[1];
+          return t[1];
+        }, trys: [], ops: [] }, f, y, t, g = Object.create((typeof Iterator === "function" ? Iterator : Object).prototype);
+        return g.next = verb(0), g["throw"] = verb(1), g["return"] = verb(2), typeof Symbol === "function" && (g[Symbol.iterator] = function() {
+          return this;
+        }), g;
+        function verb(n) {
+          return function(v) {
+            return step([n, v]);
+          };
+        }
+        function step(op) {
+          if (f) throw new TypeError("Generator is already executing.");
+          while (g && (g = 0, op[0] && (_ = 0)), _) try {
+            if (f = 1, y && (t = op[0] & 2 ? y["return"] : op[0] ? y["throw"] || ((t = y["return"]) && t.call(y), 0) : y.next) && !(t = t.call(y, op[1])).done) return t;
+            if (y = 0, t) op = [op[0] & 2, t.value];
+            switch (op[0]) {
+              case 0:
+              case 1:
+                t = op;
+                break;
+              case 4:
+                _.label++;
+                return { value: op[1], done: false };
+              case 5:
+                _.label++;
+                y = op[1];
+                op = [0];
+                continue;
+              case 7:
+                op = _.ops.pop();
+                _.trys.pop();
+                continue;
+              default:
+                if (!(t = _.trys, t = t.length > 0 && t[t.length - 1]) && (op[0] === 6 || op[0] === 2)) {
+                  _ = 0;
+                  continue;
+                }
+                if (op[0] === 3 && (!t || op[1] > t[0] && op[1] < t[3])) {
+                  _.label = op[1];
+                  break;
+                }
+                if (op[0] === 6 && _.label < t[1]) {
+                  _.label = t[1];
+                  t = op;
+                  break;
+                }
+                if (t && _.label < t[2]) {
+                  _.label = t[2];
+                  _.ops.push(op);
+                  break;
+                }
+                if (t[2]) _.ops.pop();
+                _.trys.pop();
+                continue;
+            }
+            op = body.call(thisArg, _);
+          } catch (e) {
+            op = [6, e];
+            y = 0;
+          } finally {
+            f = t = 0;
+          }
+          if (op[0] & 5) throw op[1];
+          return { value: op[0] ? op[1] : void 0, done: true };
         }
       };
-      content.addEventListener("click", (e) => {
-        if (swiped) {
-          swiped = false;
-          e.stopPropagation();
-          e.preventDefault();
-        }
-      }, true);
-      content.addEventListener("touchstart", (e) => {
-        const t = e.touches[0];
-        begin(t.clientX, t.clientY);
-      }, false);
-      content.addEventListener("touchmove", (e) => {
-        const t = e.touches[0];
-        if (moving && e.cancelable) {
-          e.preventDefault();
-        }
-        move(t.clientX, t.clientY);
-      }, { passive: false });
-      content.addEventListener("touchend", end, false);
-      content.addEventListener("touchcancel", end, false);
-      content.addEventListener("mousedown", (e) => begin(e.clientX, e.clientY), false);
-      content.addEventListener("mousemove", (e) => {
-        if (active) {
-          move(e.clientX, e.clientY);
-        }
-      }, false);
-      content.addEventListener("mouseup", end, false);
-      content.addEventListener("mouseleave", end, false);
-    }
-    startRename(row, id) {
-      let target = null;
-      for (let i = 0; i < this.sessions.length; i++) {
-        if (this.sessions[i].id === id) {
-          target = this.sessions[i];
-        }
-      }
-      if (!target) {
-        return;
-      }
-      const session = target;
-      this.setOpenRow("");
-      while (row.firstChild) {
-        row.removeChild(row.firstChild);
-      }
-      row.className = "session-row is-renaming";
-      const input = document.createElement("input");
-      input.type = "text";
-      input.className = "session-rename";
-      input.setAttribute("maxlength", "40");
-      input.value = session.title === "\u65B0\u5BF9\u8BDD" ? "" : session.title;
-      row.appendChild(input);
-      input.focus();
-      input.setSelectionRange(0, input.value.length);
-      let done = false;
-      const commit = (save) => {
-        if (done) {
-          return;
-        }
-        done = true;
-        if (save) {
-          const text = input.value.replace(/\s+/g, " ").trim();
-          session.title = text ? text.slice(0, 40) : this.titleFor(session.messages);
-          this.saveStore();
-        }
-        this.renderSessions();
+      Object.defineProperty(exports, "__esModule", { value: true });
+      exports.App = void 0;
+      var markdown_1 = require_markdown();
+      var LEVELS = [
+        { level: 0, name: "\u5173\u95ED", desc: "\u4E0D\u542F\u7528\u601D\u8003\uFF0C\u54CD\u5E94\u6700\u5FEB" },
+        { level: 1, name: "\u4F4E", desc: "\u7B80\u77ED\u601D\u8003\uFF0C\u9002\u5408\u65E5\u5E38\u95EE\u7B54" },
+        { level: 2, name: "\u4E2D", desc: "\u6DF1\u5EA6\u4E0E\u901F\u5EA6\u5E73\u8861" },
+        { level: 3, name: "\u9AD8", desc: "\u5145\u5206\u63A8\u7406\uFF0C\u590D\u6742\u4EFB\u52A1" }
+      ];
+      var LEVEL_API = ["", "low", "medium", "high"];
+      var THINK_BUDGET = [1024, 4096, 16384];
+      var PROVIDERS = {
+        openai: { label: "OpenAI", base: "https://api.openai.com/v1" },
+        deepseek: { label: "DeepSeek", base: "https://api.deepseek.com/v1" },
+        bailian: { label: "\u963F\u91CC\u4E91\u767E\u70BC", base: "https://dashscope.aliyuncs.com/compatible-mode/v1" },
+        custom: { label: "\u81EA\u5B9A\u4E49", base: "" }
       };
-      input.addEventListener("keydown", (e) => {
-        if (e.key === "Enter") {
-          e.preventDefault();
-          commit(true);
-        } else if (e.key === "Escape") {
-          e.preventDefault();
-          commit(false);
+      function $(id) {
+        return document.getElementById(id);
+      }
+      function el(tag, cls, text) {
+        var node = document.createElement(tag);
+        if (cls) {
+          node.className = cls;
         }
-      }, false);
-      input.addEventListener("blur", () => commit(true), false);
-    }
-    openDrawer() {
-      this.openRowId = "";
-      this.renderSessions();
-      this.drawerLayer.classList.add("is-open");
-      this.drawerLayer.setAttribute("aria-hidden", "false");
-    }
-    closeDrawer() {
-      this.openRowId = "";
-      this.drawerLayer.classList.remove("is-open");
-      this.drawerLayer.setAttribute("aria-hidden", "true");
-    }
-    switchSession(id) {
-      if (id === this.currentId) {
-        this.closeDrawer();
-        return;
-      }
-      let next = null;
-      for (let i = 0; i < this.sessions.length; i++) {
-        if (this.sessions[i].id === id) {
-          next = this.sessions[i];
+        if (text != null) {
+          node.textContent = text;
         }
+        return node;
       }
-      if (!next) {
-        return;
+      function uid() {
+        return "m" + Date.now().toString(36) + Math.random().toString(36).slice(2, 7);
       }
-      if (this.streaming) {
-        this.stop();
+      function scrubToolLeak(text) {
+        var out = text;
+        out = out.replace(/<\/?tool_call[^>]*>/gi, "");
+        out = out.replace(/<\/?function_call[^>]*>/gi, "");
+        out = out.replace(/\{\s*"query"\s*:\s*"[^"]*"\s*\}/g, "");
+        out = out.replace(/\{\s*"search_query"\s*:\s*"[^"]*"\s*\}/g, "");
+        return out;
       }
-      this.currentId = next.id;
-      this.messages = next.messages;
-      this.renderAll();
-      this.closeDrawer();
-      this.saveStore();
-    }
-    deleteSession(id) {
-      let idx = -1;
-      for (let i = 0; i < this.sessions.length; i++) {
-        if (this.sessions[i].id === id) {
-          idx = i;
+      function formatBytes(bytes) {
+        if (!bytes) {
+          return "\u56FE\u7247";
         }
-      }
-      if (idx < 0) {
-        return;
-      }
-      const wasCurrent = id === this.currentId;
-      if (this.openRowId === id) {
-        this.openRowId = "";
-      }
-      this.sessions.splice(idx, 1);
-      if (!this.sessions.length) {
-        this.sessions.push(this.makeSession([]));
-      }
-      if (wasCurrent) {
-        if (this.streaming) {
-          this.stop();
+        if (bytes < 1024 * 1024) {
+          return Math.max(1, Math.round(bytes / 1024)) + " KB";
         }
-        const next = this.sessions[this.sessions.length - 1];
-        this.currentId = next.id;
-        this.messages = next.messages;
-        this.renderAll();
+        return (bytes / 1024 / 1024).toFixed(1) + " MB";
       }
-      this.renderSessions();
-      this.saveStore();
-      this.toast("\u5DF2\u5220\u9664\u4F1A\u8BDD");
-    }
-    newChat() {
-      if (this.streaming) {
-        this.stop();
+      function pad2(n) {
+        return (n < 10 ? "0" : "") + n;
       }
-      const cur = this.current();
-      if (cur && cur.messages.length === 0) {
-        this.closeDrawer();
-        this.renderAll();
-        return;
-      }
-      const s = this.makeSession([]);
-      this.sessions.push(s);
-      this.currentId = s.id;
-      this.messages = s.messages;
-      this.renderAll();
-      this.closeDrawer();
-      this.saveStore();
-      this.toast("\u65B0\u5BF9\u8BDD");
+      var App = (
+        /** @class */
+        (function() {
+          function App2(bridge) {
+            this.config = {};
+            this.messages = [];
+            this.sessions = [];
+            this.currentId = "";
+            this.openRowId = "";
+            this.buildInfo = "";
+            this.requestId = "";
+            this.streaming = false;
+            this.attach = null;
+            this.modelsOpenAfter = false;
+            this.saveTimer = 0;
+            this.ignoreNextConfig = false;
+            this.renderTimer = 0;
+            this.cleanups = [];
+            this.toastTimer = 0;
+            this.bridge = bridge;
+          }
+          App2.prototype.init = function() {
+            return __awaiter(this, void 0, void 0, function() {
+              var ready, build, cfg, e_1, store, e_2;
+              var _this = this;
+              return __generator(this, function(_a) {
+                switch (_a.label) {
+                  case 0:
+                    this.cacheNodes();
+                    this.bindEvents();
+                    this.bindBridge();
+                    return [4, new Promise(function(resolve) {
+                      var timer = window.setTimeout(function() {
+                        return resolve(null);
+                      }, 6e3);
+                      _this.bridge.on("ready", function(m) {
+                        window.clearTimeout(timer);
+                        resolve(m);
+                      });
+                    })];
+                  case 1:
+                    ready = _a.sent();
+                    build = ready && ready.build ? String(ready.build) : "unknown";
+                    this.setBuildInfo(build);
+                    _a.label = 2;
+                  case 2:
+                    _a.trys.push([2, 4, , 5]);
+                    return [4, this.bridge.request("config.get", void 0, "config", 8e3)];
+                  case 3:
+                    cfg = _a.sent();
+                    this.config = this.normalizeConfig(cfg.config || {});
+                    return [3, 5];
+                  case 4:
+                    e_1 = _a.sent();
+                    this.config = this.normalizeConfig({});
+                    return [3, 5];
+                  case 5:
+                    this.applyConfig();
+                    _a.label = 6;
+                  case 6:
+                    _a.trys.push([6, 8, , 9]);
+                    return [4, this.bridge.request("store.load", void 0, "store", 8e3)];
+                  case 7:
+                    store = _a.sent();
+                    this.loadSessions(store.data || {});
+                    return [3, 9];
+                  case 8:
+                    e_2 = _a.sent();
+                    this.loadSessions({});
+                    return [3, 9];
+                  case 9:
+                    this.renderAll();
+                    return [
+                      2
+                      /*return*/
+                    ];
+                }
+              });
+            });
+          };
+          App2.prototype.cacheNodes = function() {
+            this.app = $("app");
+            this.heroComposer = $("heroComposer");
+            this.composer = $("composer");
+            this.dock = $("dock");
+            this.dockHost = $("dockHost");
+            this.thread = $("thread");
+            this.threadInner = $("threadInner");
+            this.input = $("chatInput");
+            this.sendBtn = $("sendBtn");
+            this.attachRow = $("attachRow");
+            this.attachThumb = $("attachThumb");
+            this.attachName = $("attachName");
+            this.modelChipName = $("modelChipName");
+            this.thinkChip = $("thinkChip");
+            this.thinkLabel = $("thinkLabel");
+            this.modelList = $("modelList");
+            this.modelCount = $("modelCount");
+            this.thinkList = $("thinkList");
+            this.toastEl = $("toast");
+            this.drawerLayer = $("drawerLayer");
+            this.drawerScrim = $("drawerScrim");
+            this.sessionList = $("sessionList");
+          };
+          App2.prototype.on = function(node, ev, fn) {
+            if (!node) {
+              return;
+            }
+            node.addEventListener(ev, fn, false);
+            this.cleanups.push(function() {
+              return node.removeEventListener(ev, fn, false);
+            });
+          };
+          App2.prototype.bindEvents = function() {
+            var _this = this;
+            this.on($("settingsBtn"), "click", function() {
+              return _this.openSettings();
+            });
+            this.on($("searchChip"), "click", function() {
+              return _this.toggleSearch();
+            });
+            this.bindSearchFields();
+            this.on($("settingsClose"), "click", function() {
+              return _this.closeOverlay($("settingsOverlay"));
+            });
+            this.on($("newChatBtn"), "click", function() {
+              return _this.newChat();
+            });
+            this.on($("plusBtn"), "click", function() {
+              return _this.pickImage();
+            });
+            this.on($("attachRemove"), "click", function() {
+              return _this.clearAttach();
+            });
+            this.on($("modelChip"), "click", function() {
+              return _this.openModels();
+            });
+            this.on($("modelClose"), "click", function() {
+              return _this.closeOverlay($("modelOverlay"));
+            });
+            this.on($("thinkChip"), "click", function() {
+              return _this.openThink();
+            });
+            this.on($("thinkClose"), "click", function() {
+              return _this.closeOverlay($("thinkOverlay"));
+            });
+            this.on($("sendBtn"), "click", function() {
+              return _this.streaming ? _this.stop() : _this.send();
+            });
+            this.on(this.input, "input", function() {
+              _this.autogrow();
+              _this.refreshSendState();
+            });
+            this.on(this.input, "keydown", function(e) {
+              if (e.key === "Enter" && (e.metaKey || e.ctrlKey) && !e.isComposing) {
+                e.preventDefault();
+                if (!_this.streaming) {
+                  _this.send();
+                }
+              }
+            });
+            this.on(this.input, "focus", function() {
+              return _this.composer.classList.add("is-focused");
+            });
+            this.on(this.input, "blur", function() {
+              return _this.composer.classList.remove("is-focused");
+            });
+            ["settingsOverlay", "modelOverlay", "thinkOverlay"].forEach(function(id) {
+              var ov = $(id);
+              _this.on(ov, "click", function(e) {
+                if (e.target === ov) {
+                  _this.closeOverlay(ov);
+                }
+              });
+            });
+            this.on($("fontDec"), "click", function() {
+              return _this.changeFont(-1);
+            });
+            this.on($("fontInc"), "click", function() {
+              return _this.changeFont(1);
+            });
+            this.on($("providerSelect"), "change", function() {
+              var key = $("providerSelect").value;
+              var preset = PROVIDERS[key];
+              if (preset && preset.base) {
+                $("apiUrl").value = preset.base;
+              }
+              _this.saveSettings();
+            });
+            this.on($("apiUrl"), "change", function() {
+              return _this.saveSettings();
+            });
+            this.on($("apiPort"), "change", function() {
+              return _this.saveSettings();
+            });
+            this.on($("apiKey"), "change", function() {
+              return _this.saveSettings();
+            });
+            this.on($("refreshModelsBtn"), "click", function() {
+              return _this.fetchModels();
+            });
+            this.on($("thinkParamSelect"), "change", function() {
+              _this.config.thinking.mode = $("thinkParamSelect").value;
+              _this.updateThinkParamNote();
+              _this.saveConfig();
+            });
+            this.on($("clearChatBtn"), "click", function() {
+              return _this.clearAll();
+            });
+            this.on($("menuBtn"), "click", function() {
+              return _this.openDrawer();
+            });
+            this.on($("drawerClose"), "click", function() {
+              return _this.closeDrawer();
+            });
+            this.on(this.drawerScrim, "click", function() {
+              return _this.closeDrawer();
+            });
+            this.on($("drawerNew"), "click", function() {
+              return _this.newChat();
+            });
+            this.on(this.sessionList, "click", function(e) {
+              var target = e.target;
+              var row = target.closest ? target.closest(".session-row") : null;
+              if (!row) {
+                _this.setOpenRow("");
+                return;
+              }
+              var id = row.getAttribute("data-id") || "";
+              if (!id) {
+                return;
+              }
+              if (target.closest && target.closest(".session-act")) {
+                if (target.closest(".is-danger")) {
+                  _this.deleteSession(id);
+                } else {
+                  _this.startRename(row, id);
+                }
+                return;
+              }
+              if (target.closest && target.closest(".session-content")) {
+                if (_this.openRowId === id) {
+                  _this.setOpenRow("");
+                  return;
+                }
+                _this.switchSession(id);
+              }
+            });
+            this.on(window, "keydown", function(e) {
+              if (e.key === "Escape" && _this.drawerLayer.classList.contains("is-open")) {
+                _this.closeDrawer();
+              }
+            });
+            this.on(window, "resize", function() {
+              return _this.scrollToBottom(true);
+            });
+          };
+          App2.prototype.bindBridge = function() {
+            var _this = this;
+            this.bridge.on("delta", function(m) {
+              if (m.requestId === _this.requestId) {
+                _this.appendDelta(String(m.text || ""));
+              }
+            });
+            this.bridge.on("reasoning", function(m) {
+              if (m.requestId === _this.requestId) {
+                _this.appendReasoning(String(m.text || ""));
+              }
+            });
+            this.bridge.on("searching", function(m) {
+              if (m.requestId === _this.requestId) {
+                _this.showSearching();
+              }
+            });
+            this.bridge.on("done", function(m) {
+              if (m.requestId === _this.requestId) {
+                _this.finish(true);
+              }
+            });
+            this.bridge.on("error", function(m) {
+              var ctx = String(m.context || "");
+              if (ctx === "models") {
+                _this.resetModelsBtn();
+                _this.toast(String(m.message || "\u5237\u65B0\u6A21\u578B\u5931\u8D25"));
+                return;
+              }
+              if (ctx === "image") {
+                _this.toast(String(m.message || "\u56FE\u7247\u5904\u7406\u5931\u8D25"));
+                return;
+              }
+              if (!m.requestId || m.requestId === _this.requestId) {
+                _this.fail(String(m.message || "\u8BF7\u6C42\u5931\u8D25"));
+              }
+            });
+            this.bridge.on("aborted", function(m) {
+              if (m.requestId === _this.requestId) {
+                _this.finish(false);
+              }
+            });
+            this.bridge.on("keyboard", function(m) {
+              document.documentElement.style.setProperty("--kb", "0px");
+              _this.scrollToBottom(true);
+            });
+            this.bridge.on("sources", function(m) {
+              return _this.renderSources(m.items);
+            });
+            this.bridge.on("image", function(m) {
+              return _this.receiveImage(m);
+            });
+            this.bridge.on("models", function(m) {
+              return _this.receiveModels(m);
+            });
+            this.bridge.on("config", function(m) {
+              var echo = _this.ignoreNextConfig;
+              _this.ignoreNextConfig = false;
+              _this.config = _this.normalizeConfig(m.config || _this.config);
+              if (echo) {
+                _this.updateSearchChip();
+                _this.updateThinkChip();
+                _this.modelChipName.textContent = _this.config.model || "\u6A21\u578B";
+                return;
+              }
+              _this.applyConfig();
+            });
+            this.bridge.on("ok", function(m) {
+              if (m.op === "store.clear") {
+                _this.toast("\u5DF2\u6E05\u7A7A");
+              }
+            });
+          };
+          App2.prototype.normalizeConfig = function(cfg) {
+            var out = {
+              provider: cfg.provider || "DeepSeek",
+              baseUrl: cfg.baseUrl || "https://api.deepseek.com/v1",
+              port: Number(cfg.port) || 443,
+              apiKey: cfg.apiKey || "",
+              model: cfg.model || "deepseek-chat",
+              models: Array.isArray(cfg.models) ? cfg.models.slice() : [],
+              fontSize: Number(cfg.fontSize) || 16,
+              search: {
+                mode: cfg.search && cfg.search.mode || (cfg.search && cfg.search.enabled ? "force" : "off"),
+                url: cfg.search && cfg.search.url || "",
+                key: cfg.search && cfg.search.key || "",
+                header: cfg.search && cfg.search.header || "Authorization",
+                prefix: cfg.search && cfg.search.prefix || "Bearer ",
+                body: cfg.search && cfg.search.body || '{"query":"{{query}}","num_results":{{num}}}',
+                num: Number(cfg.search && cfg.search.num || 5)
+              },
+              thinking: {
+                level: Number(cfg.thinking && cfg.thinking.level || 0),
+                mode: cfg.thinking && cfg.thinking.mode || "auto",
+                param: cfg.thinking && cfg.thinking.param || "reasoning_effort",
+                enabled: !!(cfg.thinking && cfg.thinking.enabled)
+              }
+            };
+            return out;
+          };
+          App2.prototype.applyConfig = function() {
+            document.documentElement.style.setProperty("--msg-size", this.config.fontSize + "px");
+            this.modelChipName.textContent = this.config.model || "\u6A21\u578B";
+            this.updateThinkChip();
+            $("fontSizeValue").textContent = String(this.config.fontSize);
+            var providerKey = this.providerKey(this.config.baseUrl);
+            $("providerSelect").value = providerKey;
+            $("apiUrl").value = this.config.baseUrl || "";
+            $("apiPort").value = String(this.config.port || 443);
+            $("apiKey").value = this.config.apiKey || "";
+            var mode = this.config.thinking && this.config.thinking.mode || "auto";
+            $("thinkParamSelect").value = mode;
+            this.updateThinkParamNote();
+            var search = this.config.search || {};
+            $("searchUrl").value = search.url || "";
+            $("searchKey").value = search.key || "";
+            $("searchHeader").value = search.header || "Authorization";
+            $("searchPrefix").value = search.prefix || "Bearer ";
+            $("searchBody").value = search.body || '{"query":"{{query}}","num_results":{{num}}}';
+            $("searchNum").value = String(search.num || 5);
+            this.updateSearchChip();
+          };
+          App2.prototype.searchMode = function() {
+            return this.config.search && this.config.search.mode || "off";
+          };
+          App2.prototype.updateSearchChip = function() {
+            var chip = $("searchChip");
+            var label = $("searchLabel");
+            var mode = this.searchMode();
+            chip.classList.remove("is-on", "is-force");
+            if (mode === "auto") {
+              chip.classList.add("is-on");
+              label.textContent = "\u8054\u7F51 \xB7 \u81EA\u52A8";
+            } else if (mode === "force") {
+              chip.classList.add("is-on", "is-force");
+              label.textContent = "\u8054\u7F51 \xB7 \u5F3A\u5236";
+            } else {
+              label.textContent = "\u8054\u7F51";
+            }
+            chip.setAttribute("aria-pressed", mode === "off" ? "false" : "true");
+          };
+          App2.prototype.toggleSearch = function() {
+            if (!this.config.search) {
+              this.config.search = { url: "", key: "", header: "Authorization", prefix: "Bearer " };
+            }
+            var mode = this.searchMode();
+            var next = mode === "off" ? "auto" : mode === "auto" ? "force" : "off";
+            this.config.search.mode = next;
+            if (next !== "off" && !this.config.search.url) {
+              this.toast("\u5148\u5728\u8BBE\u7F6E\u91CC\u586B\u8054\u7F51\u641C\u7D22 API \u5730\u5740");
+            }
+            this.updateSearchChip();
+            this.saveConfig();
+          };
+          App2.prototype.bindSearchFields = function() {
+            var _this = this;
+            var map = [
+              ["searchUrl", "url"],
+              ["searchKey", "key"],
+              ["searchHeader", "header"],
+              ["searchPrefix", "prefix"],
+              ["searchBody", "body"]
+            ];
+            map.forEach(function(pair) {
+              var node = $(pair[0]);
+              if (!node) {
+                return;
+              }
+              _this.on(node, "change", function() {
+                if (!_this.config.search) {
+                  _this.config.search = { enabled: false };
+                }
+                _this.config.search[pair[1]] = node.value;
+                _this.saveConfig();
+              });
+            });
+            this.on($("searchNum"), "change", function() {
+              if (!_this.config.search) {
+                _this.config.search = { enabled: false };
+              }
+              _this.config.search.num = Number($("searchNum").value) || 5;
+              _this.saveConfig();
+            });
+          };
+          App2.prototype.providerKey = function(baseUrl) {
+            var url = String(baseUrl || "");
+            if (url.indexOf("deepseek") >= 0) {
+              return "deepseek";
+            }
+            if (url.indexOf("dashscope") >= 0) {
+              return "bailian";
+            }
+            if (url.indexOf("openai.com") >= 0) {
+              return "openai";
+            }
+            return url ? "custom" : "deepseek";
+          };
+          App2.prototype.saveConfig = function() {
+            if (this.saveTimer) {
+              window.clearTimeout(this.saveTimer);
+            }
+            this.ignoreNextConfig = true;
+            var self = this;
+            this.saveTimer = window.setTimeout(function() {
+              self.saveTimer = 0;
+              self.bridge.post("config.set", { config: self.config });
+            }, 400);
+          };
+          App2.prototype.changeFont = function(delta) {
+            var next = Math.min(22, Math.max(14, (Number(this.config.fontSize) || 16) + delta));
+            this.config.fontSize = next;
+            document.documentElement.style.setProperty("--msg-size", next + "px");
+            $("fontSizeValue").textContent = String(next);
+            this.saveConfig();
+          };
+          App2.prototype.saveSettings = function() {
+            var providerKey = $("providerSelect").value;
+            var preset = PROVIDERS[providerKey];
+            this.config.provider = preset ? preset.label : this.config.provider;
+            this.config.baseUrl = String($("apiUrl").value || "").trim();
+            this.config.port = Number($("apiPort").value) || 443;
+            this.config.apiKey = String($("apiKey").value || "").trim();
+            this.saveConfig();
+          };
+          App2.prototype.thinkingMode = function() {
+            var mode = this.config.thinking && this.config.thinking.mode;
+            return typeof mode === "string" && mode ? mode : "auto";
+          };
+          App2.prototype.thinkingOffPayload = function() {
+            var mode = this.thinkingMode();
+            var model = String(this.config.model || "");
+            var base = String(this.config.baseUrl || "");
+            var qwenFamily = /qwen|qwq|qianwen|dashscope|aliyun|bailian/i.test(base) || /qwen|qwq/i.test(model);
+            if (mode === "enable_thinking" || mode === "thinking_budget" || qwenFamily) {
+              return { enable_thinking: false };
+            }
+            return null;
+          };
+          App2.prototype.thinkingPayload = function() {
+            var level = Number(this.config.thinking.level) || 0;
+            if (level <= 0) {
+              var off = this.thinkingOffPayload();
+              if (off) {
+                return { enabled: true, level: 0, params: off };
+              }
+              return { enabled: false, level: 0, params: {} };
+            }
+            var mode = this.thinkingMode();
+            if (mode === "off") {
+              return { enabled: false, level: level, params: {} };
+            }
+            var budget = THINK_BUDGET[level - 1] || 4096;
+            if (mode === "enable_thinking") {
+              return { enabled: true, level: level, params: { enable_thinking: true, thinking_budget: budget } };
+            }
+            if (mode === "thinking_budget") {
+              return { enabled: true, level: level, params: { thinking_budget: budget } };
+            }
+            if (mode === "reasoning_effort") {
+              return { enabled: true, level: level, params: { reasoning_effort: LEVEL_API[level] } };
+            }
+            var model = String(this.config.model || "");
+            if (/reasoner|r1|thinking|-think/i.test(model)) {
+              return { enabled: false, level: level, params: {} };
+            }
+            if (this.providerKey(this.config.baseUrl) === "bailian" || /qwen|qwq/i.test(model)) {
+              return { enabled: true, level: level, params: { enable_thinking: true, thinking_budget: budget } };
+            }
+            return { enabled: true, level: level, params: { reasoning_effort: LEVEL_API[level] } };
+          };
+          App2.prototype.updateThinkParamNote = function() {
+            var note = $("thinkParamNote");
+            if (!note) {
+              return;
+            }
+            var payload = this.thinkingPayload();
+            if (!payload.enabled) {
+              note.textContent = "\u5F53\u524D\u8BBE\u7F6E\u4E0D\u4F1A\u53D1\u9001\u601D\u8003\u53C2\u6570\uFF08\u6A21\u578B\u81EA\u8EAB\u601D\u8003\u6216\u5DF2\u5173\u95ED\u6863\u4F4D\uFF09";
+              return;
+            }
+            var parts = [];
+            for (var key in payload.params) {
+              if (Object.prototype.hasOwnProperty.call(payload.params, key)) {
+                parts.push(key + " = " + String(payload.params[key]));
+              }
+            }
+            note.textContent = "\u672C\u6B21\u8BF7\u6C42\u4F1A\u5E26\u4E0A\uFF1A" + parts.join("\uFF0C");
+          };
+          App2.prototype.updateThinkChip = function() {
+            var level = Number(this.config.thinking.level) || 0;
+            this.config.thinking.enabled = level > 0;
+            if (level > 0) {
+              this.thinkChip.classList.add("is-on");
+              this.thinkChip.setAttribute("aria-pressed", "true");
+              this.thinkLabel.textContent = "\u601D\u8003 \xB7 " + LEVELS[level].name;
+            } else {
+              this.thinkChip.classList.remove("is-on");
+              this.thinkChip.setAttribute("aria-pressed", "false");
+              this.thinkLabel.textContent = "\u601D\u8003";
+            }
+            this.updateThinkParamNote();
+          };
+          App2.prototype.renderThinkList = function() {
+            var _this = this;
+            var level = Number(this.config.thinking.level) || 0;
+            this.thinkList.innerHTML = "";
+            var _loop_1 = function(i2) {
+              var lv = LEVELS[i2];
+              var item = el("button", "model-item" + (lv.level === level ? " is-selected" : ""));
+              item.type = "button";
+              item.appendChild(el("span", "model-name", lv.name));
+              item.appendChild(el("span", "model-desc", lv.desc));
+              item.appendChild(el("span", "model-check", "\u2713"));
+              this_1.on(item, "click", function() {
+                _this.config.thinking.level = lv.level;
+                _this.updateThinkChip();
+                _this.saveConfig();
+                _this.closeOverlay($("thinkOverlay"));
+                _this.toast(lv.level ? "\u601D\u8003\u6863\u4F4D\uFF1A" + lv.name : "\u5DF2\u5173\u95ED\u601D\u8003");
+              });
+              this_1.thinkList.appendChild(item);
+            };
+            var this_1 = this;
+            for (var i = 0; i < LEVELS.length; i++) {
+              _loop_1(i);
+            }
+          };
+          App2.prototype.openThink = function() {
+            this.renderThinkList();
+            this.openOverlay($("thinkOverlay"));
+          };
+          App2.prototype.openModels = function() {
+            if (!this.config.models || !this.config.models.length) {
+              this.fetchModels(true);
+            } else {
+              this.renderModelList();
+              this.openOverlay($("modelOverlay"));
+            }
+          };
+          App2.prototype.renderModelList = function() {
+            var _this = this;
+            var list = this.config.models || [];
+            this.modelList.innerHTML = "";
+            var _loop_2 = function(i2) {
+              var name_1 = list[i2];
+              var item = el("button", "model-item" + (name_1 === this_2.config.model ? " is-selected" : ""));
+              item.type = "button";
+              item.appendChild(el("span", "model-name", name_1));
+              item.appendChild(el("span", "model-desc", name_1 === this_2.config.model ? "\u5F53\u524D\u6A21\u578B" : ""));
+              item.appendChild(el("span", "model-check", "\u2713"));
+              this_2.on(item, "click", function() {
+                _this.config.model = name_1;
+                _this.modelChipName.textContent = name_1;
+                _this.saveConfig();
+                _this.closeOverlay($("modelOverlay"));
+                _this.toast("\u5DF2\u5207\u6362\uFF1A" + name_1);
+              });
+              this_2.modelList.appendChild(item);
+            };
+            var this_2 = this;
+            for (var i = 0; i < list.length; i++) {
+              _loop_2(i);
+            }
+            this.modelCount.textContent = list.length + " \u4E2A\u6A21\u578B";
+          };
+          App2.prototype.fetchModels = function(openAfter) {
+            var refresh = $("refreshModelsBtn");
+            if (refresh) {
+              refresh.textContent = "\u5237\u65B0\u4E2D\u2026";
+            }
+            this.modelsOpenAfter = !!openAfter;
+            this.bridge.post("models.fetch");
+          };
+          App2.prototype.resetModelsBtn = function() {
+            var refresh = $("refreshModelsBtn");
+            if (refresh) {
+              refresh.textContent = "\u5237\u65B0\u6A21\u578B\u5217\u8868";
+            }
+          };
+          App2.prototype.receiveModels = function(m) {
+            this.resetModelsBtn();
+            var list = Array.isArray(m.models) ? m.models.filter(function(x) {
+              return typeof x === "string" && x;
+            }) : [];
+            if (!list.length) {
+              this.toast("\u6CA1\u62FF\u5230\u6A21\u578B\u5217\u8868");
+              return;
+            }
+            this.config.models = list;
+            if (list.indexOf(this.config.model) < 0) {
+              this.config.model = list[0];
+              this.modelChipName.textContent = this.config.model;
+            }
+            this.saveConfig();
+            this.renderModelList();
+            this.toast("\u6A21\u578B\u5DF2\u66F4\u65B0\uFF08" + list.length + "\uFF09");
+            if (this.modelsOpenAfter) {
+              this.modelsOpenAfter = false;
+              this.openOverlay($("modelOverlay"));
+            }
+          };
+          App2.prototype.pickImage = function() {
+            this.bridge.post("image.pick", { source: "library" });
+          };
+          App2.prototype.receiveImage = function(m) {
+            var _this = this;
+            var img = m && m.image && typeof m.image === "object" ? m.image : m;
+            if (!img || !img.dataBase64) {
+              return;
+            }
+            this.attach = {
+              dataBase64: String(img.dataBase64),
+              mime: String(img.mime || "image/jpeg"),
+              bytes: Number(img.bytes) || 0
+            };
+            this.attachThumb.src = "data:" + this.attach.mime + ";base64," + this.attach.dataBase64;
+            var w = Number(img.width) || 0;
+            var h = Number(img.height) || 0;
+            this.attachName.textContent = w && h ? w + " \xD7 " + h : formatBytes(this.attach.bytes || 0);
+            this.composer.classList.add("has-attach");
+            this.attachRow.classList.add("is-open");
+            this.composer.classList.add("is-stacked");
+            this.makeThumb("data:" + this.attach.mime + ";base64," + this.attach.dataBase64, 320, function(thumb) {
+              if (_this.attach) {
+                _this.attach.thumb = thumb;
+              }
+            });
+            this.refreshSendState();
+          };
+          App2.prototype.makeThumb = function(src, max, done) {
+            var img = new Image();
+            img.onload = function() {
+              try {
+                var w0 = img.width || max;
+                var h0 = img.height || max;
+                var scale = Math.min(1, max / Math.max(w0, h0));
+                var w = Math.max(1, Math.round(w0 * scale));
+                var h = Math.max(1, Math.round(h0 * scale));
+                var canvas = document.createElement("canvas");
+                canvas.width = w;
+                canvas.height = h;
+                var ctx = canvas.getContext("2d");
+                if (!ctx) {
+                  done("");
+                  return;
+                }
+                ctx.drawImage(img, 0, 0, w, h);
+                var url = canvas.toDataURL("image/jpeg", 0.7);
+                done(String(url).split(",")[1] || "");
+              } catch (err) {
+                done("");
+              }
+            };
+            img.onerror = function() {
+              return done("");
+            };
+            img.src = src;
+          };
+          App2.prototype.clearAttach = function() {
+            this.attach = null;
+            this.composer.classList.remove("has-attach");
+            this.attachRow.classList.remove("is-open");
+            this.composer.classList.remove("is-stacked");
+            this.attachThumb.removeAttribute("src");
+            this.attachName.textContent = "";
+            this.refreshSendState();
+          };
+          App2.prototype.autogrow = function() {
+            var ta = this.input;
+            ta.style.height = "auto";
+            var h = Math.min(ta.scrollHeight, 132);
+            ta.style.height = h + "px";
+          };
+          App2.prototype.refreshSendState = function() {
+            var has = this.input.value.trim().length > 0 || !!this.attach;
+            if (this.streaming) {
+              this.sendBtn.removeAttribute("disabled");
+              this.sendBtn.classList.add("is-stop");
+              this.sendBtn.setAttribute("aria-label", "\u505C\u6B62\u751F\u6210");
+              return;
+            }
+            this.sendBtn.classList.remove("is-stop");
+            this.sendBtn.setAttribute("aria-label", "\u53D1\u9001");
+            if (has) {
+              this.sendBtn.removeAttribute("disabled");
+            } else {
+              this.sendBtn.setAttribute("disabled", "");
+            }
+          };
+          App2.prototype.enterChat = function() {
+            if (this.app.classList.contains("chat")) {
+              return;
+            }
+            this.app.classList.add("chat");
+            this.dockHost.appendChild(this.composer);
+            this.scrollToBottom(true);
+          };
+          App2.prototype.send = function() {
+            var text = this.input.value.trim();
+            if (!text && !this.attach) {
+              return;
+            }
+            var image = this.attach ? { dataBase64: this.attach.dataBase64, mime: this.attach.mime, thumb: this.attach.thumb || "" } : null;
+            var userMsg = { id: uid(), role: "user", content: text, image: image, ts: Date.now() };
+            this.messages.push(userMsg);
+            this.input.value = "";
+            this.autogrow();
+            this.clearAttach();
+            this.enterChat();
+            this.touchCurrent();
+            this.renderAll();
+            this.scrollToBottom(true);
+            this.saveStore();
+            this.requestId = uid();
+            this.streaming = true;
+            this.refreshSendState();
+            var assistant = { id: uid(), role: "assistant", content: "", ts: Date.now() };
+            this.messages.push(assistant);
+            this.appendMessageEl(assistant, true);
+            this.scrollToBottom(true);
+            var thinking = this.thinkingPayload();
+            this.bridge.post("chat.start", {
+              requestId: this.requestId,
+              config: this.config,
+              messages: this.historyForApi(),
+              image: image,
+              thinking: thinking,
+              search: { mode: this.searchMode() }
+            });
+          };
+          App2.prototype.stop = function() {
+            if (!this.streaming) {
+              return;
+            }
+            this.bridge.post("chat.stop", { requestId: this.requestId });
+          };
+          App2.prototype.historyForApi = function() {
+            var out = [];
+            for (var i = 0; i < this.messages.length; i++) {
+              var m = this.messages[i];
+              if (m.error) {
+                continue;
+              }
+              if (m.role === "assistant" && !m.content && this.streaming && i === this.messages.length - 1) {
+                continue;
+              }
+              if (m.content) {
+                out.push({ role: m.role, content: m.content });
+              }
+            }
+            return out;
+          };
+          App2.prototype.appendDelta = function(chunk) {
+            var last = this.messages[this.messages.length - 1];
+            if (!last || last.role !== "assistant") {
+              return;
+            }
+            last.content = scrubToolLeak(last.content + chunk);
+            var wrap = this.threadInner.querySelector('[data-id="' + last.id + '"]');
+            if (wrap && wrap.classList.contains("thinking")) {
+              wrap.classList.remove("thinking");
+              wrap.classList.add("is-streaming");
+              var placeholder = wrap.querySelector(".thinking-body");
+              if (placeholder && placeholder.parentNode) {
+                placeholder.parentNode.removeChild(placeholder);
+              }
+              if (!wrap.querySelector(".ai-body")) {
+                wrap.appendChild(el("div", "ai-body"));
+              }
+            }
+            this.scheduleStreamRender(last);
+          };
+          App2.prototype.showSearching = function() {
+            var last = this.messages[this.messages.length - 1];
+            if (!last || last.role !== "assistant") {
+              return;
+            }
+            var wrap = this.threadInner.querySelector('[data-id="' + last.id + '"]');
+            if (!wrap) {
+              return;
+            }
+            var label = wrap.querySelector(".thinking-label");
+            if (label) {
+              label.textContent = "\u6B63\u5728\u8054\u7F51\u641C\u7D22\u2026";
+            }
+            this.scrollToBottom(false);
+          };
+          App2.prototype.appendReasoning = function(chunk) {
+            var last = this.messages[this.messages.length - 1];
+            if (!last || last.role !== "assistant") {
+              return;
+            }
+            last.reasoning = (last.reasoning || "") + chunk;
+            var wrap = this.threadInner.querySelector('[data-id="' + last.id + '"]');
+            if (!wrap) {
+              return;
+            }
+            var thinkingLabel = wrap.querySelector(".thinking-label");
+            if (thinkingLabel) {
+              thinkingLabel.textContent = "\u6B63\u5728\u601D\u8003\u2026";
+            }
+            var box = wrap.querySelector(".reasoning");
+            if (!box) {
+              box = el("div", "reasoning");
+              var head = el("div", "reasoning-head", "\u601D\u8003\u8FC7\u7A0B");
+              var body_1 = el("div", "reasoning-body");
+              box.appendChild(head);
+              box.appendChild(body_1);
+              var target_1 = box;
+              this.on(head, "click", function() {
+                if (target_1.classList.contains("is-open")) {
+                  target_1.classList.remove("is-open");
+                } else {
+                  target_1.classList.add("is-open");
+                }
+              });
+              wrap.insertBefore(box, wrap.firstChild);
+            }
+            var body = box.querySelector(".reasoning-body");
+            if (body) {
+              body.textContent = last.reasoning;
+            }
+            this.scrollToBottom(false);
+          };
+          App2.prototype.scheduleStreamRender = function(msg) {
+            var _this = this;
+            if (this.renderTimer) {
+              return;
+            }
+            this.renderTimer = window.setTimeout(function() {
+              _this.renderTimer = 0;
+              var node = _this.threadInner.querySelector('[data-id="' + msg.id + '"] .ai-body');
+              if (node) {
+                node.innerHTML = (0, markdown_1.renderMarkdown)(msg.content);
+                _this.scrollToBottom(false);
+              }
+            }, 120);
+          };
+          App2.prototype.finish = function(ok) {
+            if (!this.streaming) {
+              return;
+            }
+            this.streaming = false;
+            this.refreshSendState();
+            var last = this.messages[this.messages.length - 1];
+            if (last && last.role === "assistant") {
+              var node = this.threadInner.querySelector('[data-id="' + last.id + '"]');
+              if (node) {
+                node.classList.remove("is-streaming");
+                var body = node.querySelector(".ai-body");
+                if (body) {
+                  body.innerHTML = (0, markdown_1.renderMarkdown)(last.content || (ok ? "" : "\uFF08\u5DF2\u505C\u6B62\uFF09"));
+                }
+                var rbox = node.querySelector(".reasoning");
+                if (rbox) {
+                  rbox.classList.remove("is-open");
+                  rbox.classList.add("is-done");
+                  var head = rbox.querySelector(".reasoning-head");
+                  var chars = (last.reasoning || "").length;
+                  if (head && chars) {
+                    head.textContent = "\u601D\u8003\u8FC7\u7A0B \xB7 " + chars + " \u5B57\uFF08\u70B9\u6309\u5C55\u5F00\uFF09";
+                  }
+                }
+              }
+              if (!last.content) {
+                last.content = ok ? "\uFF08\u7A7A\u56DE\u590D\uFF09" : "\uFF08\u5DF2\u505C\u6B62\uFF09";
+              }
+            }
+            this.touchCurrent();
+            this.saveStore();
+            this.scrollToBottom(true);
+          };
+          App2.prototype.fail = function(message) {
+            var _this = this;
+            this.streaming = false;
+            this.refreshSendState();
+            var last = this.messages[this.messages.length - 1];
+            var node = last ? this.threadInner.querySelector('[data-id="' + last.id + '"]') : null;
+            if (last && last.role === "assistant") {
+              last.content = last.content || "";
+              last.error = true;
+              this.messages.pop();
+              if (node && node.parentNode) {
+                node.parentNode.removeChild(node);
+              }
+            }
+            var box = el("div", "msg ai");
+            var body = el("div", "msg-error", message);
+            var retry = el("button", "retry-btn", "\u91CD\u8BD5");
+            retry.type = "button";
+            this.on(retry, "click", function() {
+              if (box.parentNode) {
+                box.parentNode.removeChild(box);
+              }
+              _this.resendLast();
+            });
+            box.appendChild(body);
+            box.appendChild(retry);
+            this.threadInner.appendChild(box);
+            this.touchCurrent();
+            this.saveStore();
+            this.scrollToBottom(true);
+          };
+          App2.prototype.resendLast = function() {
+            while (this.messages.length && this.messages[this.messages.length - 1].role === "assistant") {
+              this.messages.pop();
+            }
+            var last = this.messages[this.messages.length - 1];
+            if (!last || last.role !== "user") {
+              this.renderAll();
+              return;
+            }
+            var text = last.content;
+            this.messages.pop();
+            this.renderAll();
+            this.input.value = text;
+            this.autogrow();
+            this.refreshSendState();
+            this.send();
+          };
+          App2.prototype.renderAll = function() {
+            this.threadInner.innerHTML = "";
+            if (!this.messages.length) {
+              this.app.classList.remove("chat");
+              this.heroComposer.appendChild(this.composer);
+            } else {
+              this.enterChat();
+            }
+            for (var i = 0; i < this.messages.length; i++) {
+              var m = this.messages[i];
+              if (m.role === "assistant" && !m.content && i === this.messages.length - 1) {
+                this.appendMessageEl(m, true);
+              } else {
+                this.appendMessageEl(m, false);
+              }
+            }
+            this.refreshSendState();
+          };
+          App2.prototype.renderSources = function(items) {
+            if (!Array.isArray(items) || !items.length) {
+              return;
+            }
+            var last = this.messages[this.messages.length - 1];
+            if (!last) {
+              return;
+            }
+            var wrap = this.threadInner.querySelector('[data-id="' + last.id + '"]');
+            if (!wrap) {
+              return;
+            }
+            var old = wrap.querySelector(".sources");
+            if (old) {
+              old.parentNode.removeChild(old);
+            }
+            var box = el("div", "sources");
+            box.appendChild(el("div", "sources-head", "\u6765\u6E90"));
+            var list = el("ol", "sources-list");
+            for (var i = 0; i < items.length; i++) {
+              var item = items[i] || {};
+              var li = el("li", "source-item");
+              var link = el("a", "source-link", String(item.title || item.url || "\u6765\u6E90"));
+              link.href = String(item.url || "");
+              link.setAttribute("target", "_blank");
+              link.setAttribute("rel", "noopener noreferrer");
+              li.appendChild(link);
+              if (item.url) {
+                var host = el("span", "source-host", String(item.url).replace(/^https?:\/\//, "").split("/")[0]);
+                li.appendChild(host);
+              }
+              list.appendChild(li);
+            }
+            box.appendChild(list);
+            wrap.appendChild(box);
+          };
+          App2.prototype.appendMessageEl = function(msg, streaming) {
+            if (msg.role === "user") {
+              var wrap_1 = el("div", "msg user");
+              wrap_1.setAttribute("data-id", msg.id);
+              if (msg.image && (msg.image.thumb || msg.image.dataBase64)) {
+                var img = el("img", "bubble-img");
+                img.src = msg.image.thumb ? "data:image/jpeg;base64," + msg.image.thumb : "data:" + (msg.image.mime || "image/jpeg") + ";base64," + msg.image.dataBase64;
+                wrap_1.appendChild(img);
+              }
+              if (msg.content) {
+                wrap_1.appendChild(el("div", "bubble", msg.content));
+              }
+              this.threadInner.appendChild(wrap_1);
+              return;
+            }
+            var wrap = el("div", "msg ai" + (streaming && !msg.content ? " thinking" : ""));
+            wrap.setAttribute("data-id", msg.id);
+            var body = el("div", "ai-body");
+            if (streaming && !msg.content) {
+              var dots = el("span", "thinking-dots");
+              dots.appendChild(el("i"));
+              dots.appendChild(el("i"));
+              dots.appendChild(el("i"));
+              var label = el("span", "thinking-label", "\u6B63\u5728\u601D\u8003\u2026");
+              var row = el("div", "thinking-body");
+              row.appendChild(dots);
+              row.appendChild(label);
+              wrap.appendChild(row);
+              this.threadInner.appendChild(wrap);
+              return;
+            }
+            body.innerHTML = (0, markdown_1.renderMarkdown)(msg.content || "");
+            wrap.appendChild(body);
+            this.threadInner.appendChild(wrap);
+          };
+          App2.prototype.scrollToBottom = function(force) {
+            var node = this.thread;
+            if (!node) {
+              return;
+            }
+            var nearBottom = node.scrollHeight - node.scrollTop - node.clientHeight < 120;
+            if (force || nearBottom) {
+              node.scrollTop = node.scrollHeight;
+            }
+          };
+          App2.prototype.saveStore = function() {
+            var _this = this;
+            if (this.saveTimer) {
+              window.clearTimeout(this.saveTimer);
+            }
+            this.saveTimer = window.setTimeout(function() {
+              _this.saveTimer = 0;
+              var sessions = _this.sessions.map(function(s) {
+                return {
+                  id: s.id,
+                  title: s.title,
+                  createdAt: s.createdAt,
+                  updatedAt: s.updatedAt,
+                  messages: s.messages.slice(-120).map(function(m) {
+                    return {
+                      id: m.id,
+                      role: m.role,
+                      content: m.content,
+                      image: m.image && m.image.thumb ? { mime: m.image.mime || "image/jpeg", thumb: m.image.thumb } : null,
+                      ts: m.ts || 0
+                    };
+                  })
+                };
+              });
+              _this.bridge.post("store.save", { data: { v: 2, sessions: sessions, currentId: _this.currentId } });
+            }, 700);
+          };
+          App2.prototype.current = function() {
+            for (var i = 0; i < this.sessions.length; i++) {
+              if (this.sessions[i].id === this.currentId) {
+                return this.sessions[i];
+              }
+            }
+            return this.sessions.length ? this.sessions[0] : null;
+          };
+          App2.prototype.makeSession = function(messages) {
+            var now = Date.now();
+            return {
+              id: "s" + now.toString(36) + Math.random().toString(36).slice(2, 6),
+              title: this.titleFor(messages),
+              createdAt: now,
+              updatedAt: now,
+              messages: messages
+            };
+          };
+          App2.prototype.normalizeMessages = function(list) {
+            return (Array.isArray(list) ? list : []).filter(function(m) {
+              return m && (m.role === "user" || m.role === "assistant") && typeof m.content === "string";
+            }).map(function(m) {
+              var raw = m.image && typeof m.image === "object" ? m.image : null;
+              var thumb = raw && typeof raw.thumb === "string" ? raw.thumb : "";
+              var data = raw && typeof raw.dataBase64 === "string" ? raw.dataBase64 : "";
+              var image = raw && (thumb || data) ? { mime: String(raw.mime || "image/jpeg"), thumb: thumb, dataBase64: data } : null;
+              return { id: m.id || uid(), role: m.role, content: m.content, image: image, ts: m.ts || 0 };
+            });
+          };
+          App2.prototype.loadSessions = function(data) {
+            var raw = Array.isArray(data.sessions) ? data.sessions : null;
+            var loaded = [];
+            if (raw) {
+              for (var i = 0; i < raw.length; i++) {
+                var s = raw[i];
+                if (!s || typeof s !== "object") {
+                  continue;
+                }
+                var msgs = this.normalizeMessages(s.messages || []);
+                var now = Date.now();
+                loaded.push({
+                  id: typeof s.id === "string" && s.id ? s.id : "s" + now.toString(36) + i,
+                  title: typeof s.title === "string" && s.title ? s.title : this.titleFor(msgs),
+                  createdAt: Number(s.createdAt) || now,
+                  updatedAt: Number(s.updatedAt) || now,
+                  messages: msgs
+                });
+              }
+            } else {
+              var legacy = this.normalizeMessages(data.messages || []);
+              if (legacy.length) {
+                loaded.push(this.makeSession(legacy));
+              }
+            }
+            this.sessions = loaded.length ? loaded : [this.makeSession([])];
+            var wanted = typeof data.currentId === "string" ? data.currentId : "";
+            var active = this.sessions[0];
+            for (var i = 0; i < this.sessions.length; i++) {
+              if (this.sessions[i].id === wanted) {
+                active = this.sessions[i];
+              }
+            }
+            this.currentId = active.id;
+            this.messages = active.messages;
+          };
+          App2.prototype.titleFor = function(messages) {
+            for (var i = 0; i < messages.length; i++) {
+              var m = messages[i];
+              if (m.role === "user" && m.content && m.content.trim()) {
+                var text = m.content.replace(/\s+/g, " ").trim();
+                return text.length > 22 ? text.slice(0, 22) + "\u2026" : text;
+              }
+            }
+            return "\u65B0\u5BF9\u8BDD";
+          };
+          App2.prototype.touchCurrent = function() {
+            var s = this.current();
+            if (!s) {
+              return;
+            }
+            s.updatedAt = Date.now();
+            s.title = this.titleFor(s.messages);
+            if (this.drawerLayer && this.drawerLayer.classList.contains("is-open")) {
+              this.renderSessions();
+            }
+          };
+          App2.prototype.sessionTime = function(ts) {
+            var d = new Date(ts || Date.now());
+            var now = /* @__PURE__ */ new Date();
+            var sameDay = function(a, b) {
+              return a.getFullYear() === b.getFullYear() && a.getMonth() === b.getMonth() && a.getDate() === b.getDate();
+            };
+            if (sameDay(d, now)) {
+              return pad2(d.getHours()) + ":" + pad2(d.getMinutes());
+            }
+            var yesterday = new Date(now.getTime() - 864e5);
+            if (sameDay(d, yesterday)) {
+              return "\u6628\u5929";
+            }
+            if (d.getFullYear() === now.getFullYear()) {
+              return d.getMonth() + 1 + "\u6708" + d.getDate() + "\u65E5";
+            }
+            return d.getFullYear() + "/" + (d.getMonth() + 1) + "/" + d.getDate();
+          };
+          App2.prototype.renderSessions = function() {
+            if (!this.sessionList) {
+              return;
+            }
+            this.sessionList.innerHTML = "";
+            var sorted = this.sessions.slice().sort(function(a, b) {
+              return (b.updatedAt || 0) - (a.updatedAt || 0);
+            });
+            var lastGroup = "";
+            for (var i = 0; i < sorted.length; i++) {
+              var s = sorted[i];
+              var group = this.groupFor(s.updatedAt);
+              if (group !== lastGroup) {
+                this.sessionList.appendChild(el("div", "session-group", group));
+                lastGroup = group;
+              }
+              var row = el("div", "session-row" + (s.id === this.currentId ? " is-active" : "") + (s.id === this.openRowId ? " is-open" : ""));
+              row.setAttribute("data-id", s.id);
+              var actions = el("div", "session-actions");
+              var rename = el("button", "session-act", "\u91CD\u547D\u540D");
+              rename.type = "button";
+              var del = el("button", "session-act is-danger", "\u5220\u9664");
+              del.type = "button";
+              actions.appendChild(rename);
+              actions.appendChild(del);
+              var content = el("button", "session-content");
+              content.type = "button";
+              content.appendChild(el("span", "session-title", s.title || "\u65B0\u5BF9\u8BDD"));
+              content.appendChild(el("span", "session-time", this.sessionTime(s.updatedAt)));
+              row.appendChild(actions);
+              row.appendChild(content);
+              this.sessionList.appendChild(row);
+              this.bindRowGesture(content, actions, s.id);
+            }
+          };
+          App2.prototype.groupFor = function(ts) {
+            var value = ts || 0;
+            var now = /* @__PURE__ */ new Date();
+            var startOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime();
+            if (value >= startOfToday) {
+              return "\u4ECA\u5929";
+            }
+            if (value >= startOfToday - 6 * 864e5) {
+              return "\u8FD1 7 \u5929";
+            }
+            return "\u66F4\u65E9";
+          };
+          App2.prototype.setOpenRow = function(id) {
+            this.openRowId = id;
+            if (!this.sessionList) {
+              return;
+            }
+            var rows = this.sessionList.querySelectorAll(".session-row");
+            for (var i = 0; i < rows.length; i++) {
+              var row = rows[i];
+              var rowId = row.getAttribute("data-id") || "";
+              if (!!id && rowId === id) {
+                row.classList.add("is-open");
+              } else {
+                row.classList.remove("is-open");
+              }
+              var content = row.querySelector(".session-content");
+              if (content) {
+                content.style.transform = "";
+              }
+            }
+          };
+          App2.prototype.bindRowGesture = function(content, actions, id) {
+            var _this = this;
+            var WIDTH = 136;
+            var THRESH = 30;
+            var startX = 0;
+            var startY = 0;
+            var dx = 0;
+            var dy = 0;
+            var active = false;
+            var moving = false;
+            var swiped = false;
+            var resetActions = function() {
+              actions.style.transition = "";
+              actions.style.transform = "";
+              actions.style.opacity = "";
+            };
+            var begin = function(x, y) {
+              startX = x;
+              startY = y;
+              dx = 0;
+              dy = 0;
+              active = true;
+              moving = false;
+              swiped = false;
+            };
+            var move = function(x, y) {
+              if (!active) {
+                return;
+              }
+              dx = x - startX;
+              dy = y - startY;
+              if (!moving && Math.abs(dy) > 10 && Math.abs(dy) > Math.abs(dx)) {
+                active = false;
+                resetActions();
+                return;
+              }
+              if (!moving && Math.abs(dx) > 6) {
+                moving = true;
+              }
+              if (moving) {
+                var base = _this.openRowId === id ? -WIDTH : 0;
+                var offset = Math.min(0, Math.max(-WIDTH, base + dx));
+                var reveal = -offset;
+                actions.style.transition = "none";
+                actions.style.transform = "translateX(" + (WIDTH - reveal) + "px)";
+                actions.style.opacity = String(Math.min(1, reveal / WIDTH));
+              }
+            };
+            var end = function() {
+              if (!active) {
+                return;
+              }
+              active = false;
+              resetActions();
+              if (moving && Math.abs(dx) > 8) {
+                swiped = true;
+                if (dx < -THRESH) {
+                  _this.setOpenRow(id);
+                } else if (dx > THRESH) {
+                  _this.setOpenRow("");
+                } else {
+                  _this.setOpenRow(_this.openRowId === id ? "" : id);
+                }
+              }
+            };
+            content.addEventListener("click", function(e) {
+              if (swiped) {
+                swiped = false;
+                e.stopPropagation();
+                e.preventDefault();
+              }
+            }, true);
+            content.addEventListener("touchstart", function(e) {
+              var t = e.touches[0];
+              begin(t.clientX, t.clientY);
+            }, false);
+            content.addEventListener("touchmove", function(e) {
+              var t = e.touches[0];
+              if (moving && e.cancelable) {
+                e.preventDefault();
+              }
+              move(t.clientX, t.clientY);
+            }, { passive: false });
+            content.addEventListener("touchend", end, false);
+            content.addEventListener("touchcancel", end, false);
+            content.addEventListener("mousedown", function(e) {
+              return begin(e.clientX, e.clientY);
+            }, false);
+            content.addEventListener("mousemove", function(e) {
+              if (active) {
+                move(e.clientX, e.clientY);
+              }
+            }, false);
+            content.addEventListener("mouseup", end, false);
+            content.addEventListener("mouseleave", end, false);
+          };
+          App2.prototype.startRename = function(row, id) {
+            var _this = this;
+            var target = null;
+            for (var i = 0; i < this.sessions.length; i++) {
+              if (this.sessions[i].id === id) {
+                target = this.sessions[i];
+              }
+            }
+            if (!target) {
+              return;
+            }
+            var session = target;
+            this.setOpenRow("");
+            while (row.firstChild) {
+              row.removeChild(row.firstChild);
+            }
+            row.className = "session-row is-renaming";
+            var input = document.createElement("input");
+            input.type = "text";
+            input.className = "session-rename";
+            input.setAttribute("maxlength", "40");
+            input.value = session.title === "\u65B0\u5BF9\u8BDD" ? "" : session.title;
+            row.appendChild(input);
+            input.focus();
+            input.setSelectionRange(0, input.value.length);
+            var done = false;
+            var commit = function(save) {
+              if (done) {
+                return;
+              }
+              done = true;
+              if (save) {
+                var text = input.value.replace(/\s+/g, " ").trim();
+                session.title = text ? text.slice(0, 40) : _this.titleFor(session.messages);
+                _this.saveStore();
+              }
+              _this.renderSessions();
+            };
+            input.addEventListener("keydown", function(e) {
+              if (e.key === "Enter") {
+                e.preventDefault();
+                commit(true);
+              } else if (e.key === "Escape") {
+                e.preventDefault();
+                commit(false);
+              }
+            }, false);
+            input.addEventListener("blur", function() {
+              return commit(true);
+            }, false);
+          };
+          App2.prototype.openDrawer = function() {
+            this.openRowId = "";
+            this.renderSessions();
+            this.drawerLayer.classList.add("is-open");
+            this.drawerLayer.setAttribute("aria-hidden", "false");
+          };
+          App2.prototype.closeDrawer = function() {
+            this.openRowId = "";
+            this.drawerLayer.classList.remove("is-open");
+            this.drawerLayer.setAttribute("aria-hidden", "true");
+          };
+          App2.prototype.switchSession = function(id) {
+            if (id === this.currentId) {
+              this.closeDrawer();
+              return;
+            }
+            var next = null;
+            for (var i = 0; i < this.sessions.length; i++) {
+              if (this.sessions[i].id === id) {
+                next = this.sessions[i];
+              }
+            }
+            if (!next) {
+              return;
+            }
+            if (this.streaming) {
+              this.stop();
+            }
+            this.currentId = next.id;
+            this.messages = next.messages;
+            this.renderAll();
+            this.closeDrawer();
+            this.saveStore();
+          };
+          App2.prototype.deleteSession = function(id) {
+            var idx = -1;
+            for (var i = 0; i < this.sessions.length; i++) {
+              if (this.sessions[i].id === id) {
+                idx = i;
+              }
+            }
+            if (idx < 0) {
+              return;
+            }
+            var wasCurrent = id === this.currentId;
+            if (this.openRowId === id) {
+              this.openRowId = "";
+            }
+            this.sessions.splice(idx, 1);
+            if (!this.sessions.length) {
+              this.sessions.push(this.makeSession([]));
+            }
+            if (wasCurrent) {
+              if (this.streaming) {
+                this.stop();
+              }
+              var next = this.sessions[this.sessions.length - 1];
+              this.currentId = next.id;
+              this.messages = next.messages;
+              this.renderAll();
+            }
+            this.renderSessions();
+            this.saveStore();
+            this.toast("\u5DF2\u5220\u9664\u4F1A\u8BDD");
+          };
+          App2.prototype.newChat = function() {
+            if (this.streaming) {
+              this.stop();
+            }
+            var cur = this.current();
+            if (cur && cur.messages.length === 0) {
+              this.closeDrawer();
+              this.renderAll();
+              return;
+            }
+            var s = this.makeSession([]);
+            this.sessions.push(s);
+            this.currentId = s.id;
+            this.messages = s.messages;
+            this.renderAll();
+            this.closeDrawer();
+            this.saveStore();
+            this.toast("\u65B0\u5BF9\u8BDD");
+          };
+          App2.prototype.clearAll = function() {
+            var s = this.current();
+            if (s) {
+              s.messages = [];
+              s.title = "\u65B0\u5BF9\u8BDD";
+              s.updatedAt = Date.now();
+              this.messages = s.messages;
+            }
+            this.renderAll();
+            this.saveStore();
+            this.closeOverlay($("settingsOverlay"));
+            this.toast("\u5DF2\u6E05\u7A7A\u5F53\u524D\u5BF9\u8BDD");
+          };
+          App2.prototype.openOverlay = function(node) {
+            node.classList.add("is-open");
+            node.setAttribute("aria-hidden", "false");
+          };
+          App2.prototype.closeOverlay = function(node) {
+            node.classList.remove("is-open");
+            node.setAttribute("aria-hidden", "true");
+          };
+          App2.prototype.openSettings = function() {
+            this.applyConfig();
+            this.updateSettingsNote();
+            this.openOverlay($("settingsOverlay"));
+          };
+          App2.prototype.setBuildInfo = function(build) {
+            this.buildInfo = build;
+            this.updateSettingsNote();
+          };
+          App2.prototype.updateSettingsNote = function() {
+            var note = document.querySelector("#settingsOverlay .sheet-note");
+            if (!note) {
+              return;
+            }
+            note.textContent = "\u7248\u672C " + (this.buildInfo || "unknown") + " \xB7 \u914D\u7F6E\u4EC5\u4FDD\u5B58\u5728\u672C\u673A";
+          };
+          App2.prototype.toast = function(text) {
+            var _this = this;
+            this.toastEl.textContent = text;
+            this.toastEl.classList.add("is-visible");
+            if (this.toastTimer) {
+              window.clearTimeout(this.toastTimer);
+            }
+            this.toastTimer = window.setTimeout(function() {
+              _this.toastEl.classList.remove("is-visible");
+            }, 1600);
+          };
+          return App2;
+        })()
+      );
+      exports.App = App;
     }
-    clearAll() {
-      const s = this.current();
-      if (s) {
-        s.messages = [];
-        s.title = "\u65B0\u5BF9\u8BDD";
-        s.updatedAt = Date.now();
-        this.messages = s.messages;
-      }
-      this.renderAll();
-      this.saveStore();
-      this.closeOverlay($("settingsOverlay"));
-      this.toast("\u5DF2\u6E05\u7A7A\u5F53\u524D\u5BF9\u8BDD");
-    }
-    /* -------------------------------------------------------------- sheets -- */
-    openOverlay(node) {
-      node.classList.add("is-open");
-      node.setAttribute("aria-hidden", "false");
-    }
-    closeOverlay(node) {
-      node.classList.remove("is-open");
-      node.setAttribute("aria-hidden", "true");
-    }
-    openSettings() {
-      this.applyConfig();
-      this.updateSettingsNote();
-      this.openOverlay($("settingsOverlay"));
-    }
-    setBuildInfo(build) {
-      this.buildInfo = build;
-      this.updateSettingsNote();
-    }
-    updateSettingsNote() {
-      const note = document.querySelector("#settingsOverlay .sheet-note");
-      if (!note) {
-        return;
-      }
-      note.textContent = "\u7248\u672C " + (this.buildInfo || "unknown") + " \xB7 \u914D\u7F6E\u4EC5\u4FDD\u5B58\u5728\u672C\u673A";
-    }
-    toast(text) {
-      this.toastEl.textContent = text;
-      this.toastEl.classList.add("is-visible");
-      if (this.toastTimer) {
-        window.clearTimeout(this.toastTimer);
-      }
-      this.toastTimer = window.setTimeout(() => {
-        this.toastEl.classList.remove("is-visible");
-      }, 1600);
-    }
-  };
+  });
 
-  // src/main.ts
-  function boot() {
-    const bridge = new Bridge();
-    const app = new App(bridge);
-    window.__app = app;
-    app.init().catch(function(err) {
-      const box = document.createElement("pre");
-      box.style.cssText = "position:fixed;left:12px;right:12px;bottom:12px;z-index:999;margin:0;padding:10px 12px;border-radius:10px;background:#fff;color:#b3261e;font-size:12px;line-height:1.5;white-space:pre-wrap;box-shadow:0 10px 30px rgba(0,0,0,.18)";
-      box.textContent = "UI init failed: " + (err && err.message ? err.message : String(err));
-      document.body.appendChild(box);
-    });
-  }
-  if (document.readyState === "loading") {
-    document.addEventListener("DOMContentLoaded", boot, false);
-  } else {
-    boot();
-  }
+  // .build/es5/main.js
+  var require_main = __commonJS({
+    ".build/es5/main.js": function(exports) {
+      Object.defineProperty(exports, "__esModule", { value: true });
+      var bridge_1 = require_bridge();
+      var app_1 = require_app();
+      function boot() {
+        var bridge = new bridge_1.Bridge();
+        var app = new app_1.App(bridge);
+        window.__app = app;
+        app.init().catch(function(err) {
+          var box = document.createElement("pre");
+          box.style.cssText = "position:fixed;left:12px;right:12px;bottom:12px;z-index:999;margin:0;padding:10px 12px;border-radius:10px;background:#fff;color:#b3261e;font-size:12px;line-height:1.5;white-space:pre-wrap;box-shadow:0 10px 30px rgba(0,0,0,.18)";
+          box.textContent = "UI init failed: " + (err && err.message ? err.message : String(err));
+          document.body.appendChild(box);
+        });
+      }
+      if (document.readyState === "loading") {
+        document.addEventListener("DOMContentLoaded", boot, false);
+      } else {
+        boot();
+      }
+    }
+  });
+  require_main();
 })();
 
 </script>

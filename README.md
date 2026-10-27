@@ -11,7 +11,7 @@
 
 No account, no login, no telemetry — it talks to any OpenAI-compatible endpoint, and your API key never leaves your own device.
 
-`v1.1.1` · Objective-C + TypeScript · MIT
+`v1.2.0` · Objective-C + TypeScript · MIT
 
 </div>
 
@@ -45,23 +45,25 @@ It **ships no API and no keys**. You point it at your own OpenAI-compatible serv
 - **Session archive** — left drawer grouped by Today / Last 7 days / Earlier, swipe to rename or delete;
 - **Image input** — pick from the photo library; history keeps a 320 px thumbnail;
 - **Local-only data** — sessions, settings and keys live in the app sandbox; deleting the app deletes everything;
-- **Tuned for iOS 10** — no optional chaining, no flex `gap`, no `inset`, no `backdrop-filter`, etc. The build script rejects forbidden CSS.
+- **armv7 + arm64** — one IPA for 32-bit devices (iPad 4, iPhone 5/5c) and for 64-bit devices on iOS 9/10 (iPhone 5s … 7);
+- **Tuned for old WebKit** — the UI is compiled to **ES5** (iOS 9 has no `let`/arrow functions), and avoids `gap`, `inset`, `backdrop-filter` and friends; the build script rejects forbidden CSS and re-checks ES5.
 
 ## Compatibility
 
 | | Status |
 | --- | --- |
-| iPad 4 (iPad3,4, A6X, armv7) | ✅ tested on iOS 10.3.4 |
-| Other armv7 devices on **iOS 10** (iPhone 5 / 5c) | ⚠️ untested, should work |
-| armv7 devices capped at **iOS 8 / 9** (iPad 2 / 3, iPhone 4S, iPod touch 5) | ❌ won't run: the UI bundle is ES2015 and the CSS uses custom properties, both need iOS 10 |
-| 64-bit devices | ❌ this build is armv7 only |
+| iPad 4 (iPad3,4, armv7) on iOS 10.3.4 | ✅ tested |
+| armv7 on iOS 9.3.5 / 9.3.6 (iPad 2/3, iPhone 4S, iPod touch 5) | ⚠️ supported, not tested |
+| arm64 on iOS 9 / 10 (iPhone 5s … 7) | ⚠️ supported, not tested |
+| iOS below 9.3 | ❌ no CSS custom properties |
+| iOS 11 and later | ❔ untested |
 | Jailbreak tweaks | not required (AppSync + unsigned IPA is enough) |
 
 ## Install
 
 > Requires **AppSync Unified** or a self-signing tool — the IPA is unsigned.
 
-1. Download `iLegacyGPT-1.1.1.ipa` from [Releases](../../releases);
+1. Download `iLegacyGPT-1.2.0.ipa` from [Releases](../../releases);
 2. Install with i4Tools / ipatool / any self-signing tool;
 3. Open the app → settings (top right) → fill in **provider, base URL, port, API key**, then refresh the model list.
 
@@ -88,11 +90,11 @@ See [PRIVACY.md](PRIVACY.md) (Chinese).
 **Toolchain**: WSL (Ubuntu 22.04) + Theos + iPhoneOS 10.3 SDK + Swift toolchain — see [docs/build-wsl.md](docs/build-wsl.md) (Chinese).
 
 ```bash
-VERSION=1.1.1 bash tools/build_local.sh
-python tools/package_ipa.py --app ios/.theos/obj/iphone/8.0/ChatAI.app --version 1.1.1 --name iLegacyGPT
+VERSION=1.2.0 bash tools/build_local.sh
+python tools/package_ipa.py --app ios/.theos/obj/iphone/8.0/ChatAI.app --version 1.2.0 --name iLegacyGPT
 ```
 
-Output: `dist/iLegacyGPT-1.1.1.ipa` (~100 KB).
+Output: `dist/iLegacyGPT-1.2.0.ipa` (~100 KB).
 
 There is **no CI**: releases are built locally in about five seconds.
 

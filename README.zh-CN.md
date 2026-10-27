@@ -11,7 +11,7 @@
 
 无登录、无账号、无遥测；直接连接任意 OpenAI 兼容接口，API Key 只存在你自己的设备里。
 
-`v1.1.1` · Objective-C + TypeScript · MIT
+`v1.2.0` · Objective-C + TypeScript · MIT
 
 </div>
 
@@ -45,23 +45,25 @@
 - **会话归档**：左侧抽屉按「今天 / 近 7 天 / 更早」分组，左滑重命名、删除；
 - **图片上传**：从相册选图发送，历史里保留 320px 缩略图；
 - **数据只在本机**：会话、配置、Key 全部存在 App 沙盒，卸载即消失；
-- **为 iOS 10 定制**：不用 `?.`、`??`、flex `gap`、`inset`、`backdrop-filter`、`classList.toggle(cls, force)` 等新特性，构建脚本会拦截违规 CSS。
+- **armv7 + arm64 双架构**：同一个包能装 32 位机（iPad 4、iPhone 5/5c）与跑 iOS 9/10 的 64 位机（iPhone 5s ~ 7）；
+- **为老 WebKit 定制**：界面 JS 编译到 **ES5**（iOS 9 没有 `let`/箭头函数），不用 `gap`、`inset`、`backdrop-filter`、`classList.toggle(cls, force)` 等新特性，构建脚本会拦截违规 CSS 并复查 ES5。
 
 ## 支持范围
 
 | 项目 | 状态 |
 | --- | --- |
-| iPad 4（iPad3,4，A6X，armv7） | ✅ 实测（iOS 10.3.4） |
-| 其他跑 **iOS 10** 的 armv7 设备（iPhone 5 / 5c） | ⚠️ 未验证，理论可用 |
-| 最高只能到 **iOS 8 / 9** 的 armv7 设备（iPad 2/3、iPhone 4S、iPod touch 5） | ❌ 跑不起来：界面 JS 是 ES2015、样式用了 CSS 变量，两者都要 iOS 10 |
-| 64 位设备 | ❌ 本构建只编了 armv7 |
+| iPad 4（iPad3,4，armv7）+ iOS 10.3.4 | ✅ 实测 |
+| armv7 + iOS 9.3.5 / 9.3.6（iPad 2/3、iPhone 4S、iPod touch 5） | ⚠️ 已支持，未实测 |
+| arm64 + iOS 9 / 10（iPhone 5s ~ 7） | ⚠️ 已支持，未实测 |
+| iOS 9.3 以下 | ❌ 缺 CSS 自定义属性 |
+| iOS 11 及以上 | ❔ 未验证 |
 | 越狱插件 | 不需要（AppSync + 未签名 IPA 即可） |
 
 ## 安装
 
 > 需要设备已安装 **AppSync Unified**（或使用自签名工具重签），否则无法安装未签名 IPA。
 
-1. 到 [Releases](../../releases) 下载 `iLegacyGPT-1.1.1.ipa`；
+1. 到 [Releases](../../releases) 下载 `iLegacyGPT-1.2.0.ipa`；
 2. 用爱思助手 / ipatool / 自签名工具安装；
 3. 打开 App → 右上角设置 → 填写 **provider、Base URL、端口、API Key**，拉一次模型列表。
 
@@ -88,11 +90,11 @@
 **环境**：WSL（Ubuntu 22.04）+ Theos + iPhoneOS10.3 SDK + Swift toolchain（详见 [docs/build-wsl.md](docs/build-wsl.md)）。
 
 ```bash
-VERSION=1.1.1 bash tools/build_local.sh
-python tools/package_ipa.py --app ios/.theos/obj/iphone/8.0/ChatAI.app --version 1.1.1 --name iLegacyGPT
+VERSION=1.2.0 bash tools/build_local.sh
+python tools/package_ipa.py --app ios/.theos/obj/iphone/8.0/ChatAI.app --version 1.2.0 --name iLegacyGPT
 ```
 
-产物：`dist/iLegacyGPT-1.1.1.ipa`（约 100 KB）。
+产物：`dist/iLegacyGPT-1.2.0.ipa`（约 100 KB）。
 
 本项目**不使用 CI**：出包全靠本地脚本，WSL 里约 5 秒完成。
 

@@ -1,29 +1,60 @@
-import { build } from 'esbuild';
+import { build, transform } from 'esbuild';
 import { fileURLToPath } from 'url';
 import { dirname, join, resolve } from 'path';
-import { mkdirSync, readFileSync, writeFileSync, copyFileSync, rmSync } from 'fs';
+import { execFileSync } from 'child_process';
+import { mkdirSync, readFileSync, writeFileSync, copyFileSync, rmSync, existsSync } from 'fs';
 
 const here = dirname(fileURLToPath(import.meta.url));
 const root = here;                         // web/
 const dist = join(root, 'dist');
 const shellWeb = resolve(root, '..', 'ios', 'Resources', 'web');
+const es5Dir = join(root, '.build', 'es5');
 
 mkdirSync(dist, { recursive: true });
 mkdirSync(shellWeb, { recursive: true });
 
-// 1. TypeScript -> one IIFE bundle (iOS 10 WebKit friendly: ES2015 only)
+// 1. TypeScript -> ES5 first, then bundle.
+//    The iPad 4 runs iOS 10 (ES2015 is fine there), but the same shell also has
+//    to run on iOS 9.3.5 devices, whose WebKit has no `let`/arrow functions.
+//    esbuild cannot lower to ES5, so the project's own tsc does that pass and
+//    esbuild only bundles the resulting CommonJS.
+rmSync(join(root, '.build'), { recursive: true, force: true });
+execFileSync(process.execPath, [
+  join(root, 'node_modules', 'typescript', 'bin', 'tsc'),
+  '-p', join(root, 'tsconfig.es5.json')
+], { stdio: 'inherit' });
+if (!existsSync(join(es5Dir, 'main.js'))) {
+  throw new Error('tsc did not emit ES5 output into ' + es5Dir);
+}
+// the emitted files are CommonJS, but web/package.json declares "type": "module"
+writeFileSync(join(es5Dir, 'package.json'), '{ "type": "commonjs" }\n', 'utf8');
+
 await build({
-  entryPoints: [join(root, 'src', 'main.ts')],
+  entryPoints: [join(es5Dir, 'main.js')],
   outfile: join(dist, 'app.js'),
   bundle: true,
   format: 'iife',
-  target: ['es2015'],
+  target: ['es5'],
   platform: 'browser',
   sourcemap: false,
   minify: false,
   legalComments: 'none',
   logLevel: 'info'
 });
+
+// The bundle must parse as ES5: catch a regression before it reaches the iPad.
+{
+  const code = readFileSync(join(dist, 'app.js'), 'utf8');
+  try {
+    await transform(code, { target: 'es5', loader: 'js' });
+  } catch (err) {
+    throw new Error('bundle still contains syntax iOS 9 WebKit cannot parse: ' + err.message);
+  }
+  const leftovers = [/\bclass\s+[A-Za-z_$]/, /=>/, /\bconst\s/, /\blet\s/].filter((re) => re.test(code));
+  if (leftovers.length) {
+    throw new Error('bundle is not ES5 (matched ' + leftovers.map(String).join(', ') + ')');
+  }
+}
 
 // 2. stylesheet = prototype tokens + production additions
 const css =

@@ -756,33 +756,64 @@ svg { display: block; }
 .drawer-layer.is-open .drawer { transform: translateX(0); }
 .drawer-head { display: flex; align-items: center; justify-content: space-between; padding: 14px 10px 6px; }
 .drawer-head h2 { font-size: 13px; font-weight: 500; letter-spacing: 2px; color: rgba(27, 29, 26, 0.38); }
-.drawer-list { flex: 1 1 auto; overflow-y: auto; -webkit-overflow-scrolling: touch; padding: 4px 0; }
+.drawer-list { flex: 1 1 auto; overflow-y: auto; -webkit-overflow-scrolling: touch; padding: 2px 0 6px; }
 .drawer-list::-webkit-scrollbar { width: 0; height: 0; }
-.session-row { display: flex; align-items: center; border-radius: 12px; }
-.session-row + .session-row { margin-top: 2px; }
-.session-row:hover { background: rgba(0, 0, 0, 0.035); }
-.session-row.is-active { background: rgba(185, 138, 75, 0.11); }
-.session-item {
-  flex: 1 1 auto; min-width: 0;
-  display: flex; align-items: center; gap: 8px;
-  padding: 11px 4px 11px 12px;
-  border: 0; background: none; font: inherit; color: #1b1d1a; text-align: left;
+.session-group {
+  padding: 12px 12px 5px;
+  font-size: 11px; letter-spacing: 1.4px;
+  color: rgba(27, 29, 26, 0.32);
 }
+.session-group:first-child { padding-top: 4px; }
+.session-row { position: relative; overflow: hidden; border-radius: 12px; background: #fff; }
+.session-row + .session-row { margin-top: 2px; }
+.session-actions {
+  position: absolute; top: 0; right: 0; bottom: 0;
+  display: flex; align-items: stretch; width: 136px;
+  z-index: 2;
+  opacity: 0; pointer-events: none;
+  transform: translateX(14px);
+  transition: transform 0.18s cubic-bezier(0.22, 0.7, 0.28, 1), opacity 0.18s ease;
+}
+.session-row.is-open .session-actions { opacity: 1; pointer-events: auto; transform: translateX(0); }
+.session-act {
+  flex: 1 1 0; border: 0;
+  font: inherit; font-size: 13px;
+  color: #4a4d45; background: #f1f1eb;
+}
+.session-act + .session-act { margin-left: 1px; }
+.session-act.is-danger { color: #b3261e; background: #fbecea; }
+.session-act:active { filter: brightness(0.95); }
+.session-content {
+  position: relative; z-index: 1;
+  display: flex; align-items: center; gap: 8px;
+  width: 100%; margin: 0;
+  padding: 11px 12px;
+  border: 0; border-radius: 12px;
+  background: #fff;
+  font: inherit; font-size: 15px; color: #1b1d1a; text-align: left;
+  -webkit-user-select: none; user-select: none;
+  touch-action: pan-y;
+  transition: transform 0.18s cubic-bezier(0.22, 0.7, 0.28, 1), padding 0.18s cubic-bezier(0.22, 0.7, 0.28, 1);
+}
+.session-row:hover .session-content { background: rgba(0, 0, 0, 0.035); }
+.session-row.is-active .session-content { background: rgba(185, 138, 75, 0.11); }
+.session-row.is-open .session-content { padding-right: 148px; }
 .session-title {
   flex: 1 1 auto; min-width: 0;
   overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
   font-size: 15px;
 }
 .session-time { flex-shrink: 0; font-size: 12px; color: rgba(27, 29, 26, 0.34); }
-.session-del {
-  flex-shrink: 0; width: 28px; height: 28px; margin-right: 6px;
-  border-radius: 50%; font-size: 16px; line-height: 1;
-  color: rgba(27, 29, 26, 0.32); opacity: 0.55;
+.session-rename {
+  width: 100%; margin: 0;
+  padding: 10px 12px;
+  border: 1px solid rgba(185, 138, 75, 0.5); border-radius: 12px;
+  background: #fff;
+  font: inherit; font-size: 15px; color: #1b1d1a;
+  outline: none;
 }
-.session-row:hover .session-del,
-.session-row.is-active .session-del { opacity: 1; }
-.session-del:hover { background: rgba(0, 0, 0, 0.06); color: #b3261e; }
 .drawer-foot { padding: 8px 4px 2px; border-top: 1px solid rgba(0, 0, 0, 0.06); }
+.drawer-hint { padding: 2px 12px 6px; font-size: 11px; color: rgba(27, 29, 26, 0.30); }
 .drawer-new {
   display: flex; align-items: center; gap: 8px; width: 100%;
   padding: 11px 12px; border-radius: 12px; border: 0; background: none;
@@ -950,6 +981,7 @@ svg { display: block; }
       </div>
       <div class="drawer-list" id="sessionList"></div>
       <div class="drawer-foot">
+        <div class="drawer-hint">左滑会话可重命名或删除</div>
         <button class="drawer-new" id="drawerNew" type="button">
           <span class="drawer-new-plus">+</span><span>新对话</span>
         </button>
@@ -1468,6 +1500,7 @@ svg { display: block; }
       this.messages = [];
       this.sessions = [];
       this.currentId = "";
+      this.openRowId = "";
       this.requestId = "";
       this.streaming = false;
       this.attach = null;
@@ -1596,17 +1629,28 @@ svg { display: block; }
         const target = e.target;
         const row = target.closest ? target.closest(".session-row") : null;
         if (!row) {
+          this.setOpenRow("");
           return;
         }
         const id = row.getAttribute("data-id") || "";
         if (!id) {
           return;
         }
-        if (target.classList && target.classList.contains("session-del")) {
-          this.deleteSession(id);
+        if (target.closest && target.closest(".session-act")) {
+          if (target.closest(".is-danger")) {
+            this.deleteSession(id);
+          } else {
+            this.startRename(row, id);
+          }
           return;
         }
-        this.switchSession(id);
+        if (target.closest && target.closest(".session-content")) {
+          if (this.openRowId === id) {
+            this.setOpenRow("");
+            return;
+          }
+          this.switchSession(id);
+        }
       });
       this.on(window, "keydown", (e) => {
         if (e.key === "Escape" && this.drawerLayer.classList.contains("is-open")) {
@@ -2234,28 +2278,210 @@ svg { display: block; }
       }
       this.sessionList.innerHTML = "";
       const sorted = this.sessions.slice().sort((a, b) => (b.updatedAt || 0) - (a.updatedAt || 0));
+      let lastGroup = "";
       for (let i = 0; i < sorted.length; i++) {
         const s = sorted[i];
-        const row = el("div", "session-row" + (s.id === this.currentId ? " is-active" : ""));
+        const group = this.groupFor(s.updatedAt);
+        if (group !== lastGroup) {
+          this.sessionList.appendChild(el("div", "session-group", group));
+          lastGroup = group;
+        }
+        const row = el("div", "session-row" + (s.id === this.currentId ? " is-active" : "") + (s.id === this.openRowId ? " is-open" : ""));
         row.setAttribute("data-id", s.id);
-        const item = el("button", "session-item");
-        item.type = "button";
-        item.appendChild(el("span", "session-title", s.title || "\u65B0\u5BF9\u8BDD"));
-        item.appendChild(el("span", "session-time", this.sessionTime(s.updatedAt)));
-        const del = el("button", "session-del", "\xD7");
+        const actions = el("div", "session-actions");
+        const rename = el("button", "session-act", "\u91CD\u547D\u540D");
+        rename.type = "button";
+        const del = el("button", "session-act is-danger", "\u5220\u9664");
         del.type = "button";
-        del.setAttribute("aria-label", "\u5220\u9664\u4F1A\u8BDD");
-        row.appendChild(item);
-        row.appendChild(del);
+        actions.appendChild(rename);
+        actions.appendChild(del);
+        const content = el("button", "session-content");
+        content.type = "button";
+        content.appendChild(el("span", "session-title", s.title || "\u65B0\u5BF9\u8BDD"));
+        content.appendChild(el("span", "session-time", this.sessionTime(s.updatedAt)));
+        row.appendChild(actions);
+        row.appendChild(content);
         this.sessionList.appendChild(row);
+        this.bindRowGesture(content, actions, s.id);
       }
     }
+    groupFor(ts) {
+      const value = ts || 0;
+      const now = /* @__PURE__ */ new Date();
+      const startOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime();
+      if (value >= startOfToday) {
+        return "\u4ECA\u5929";
+      }
+      if (value >= startOfToday - 6 * 864e5) {
+        return "\u8FD1 7 \u5929";
+      }
+      return "\u66F4\u65E9";
+    }
+    setOpenRow(id) {
+      this.openRowId = id;
+      if (!this.sessionList) {
+        return;
+      }
+      const rows = this.sessionList.querySelectorAll(".session-row");
+      for (let i = 0; i < rows.length; i++) {
+        const row = rows[i];
+        const rowId = row.getAttribute("data-id") || "";
+        row.classList.toggle("is-open", !!id && rowId === id);
+        const content = row.querySelector(".session-content");
+        if (content) {
+          content.style.transform = "";
+        }
+      }
+    }
+    bindRowGesture(content, actions, id) {
+      const WIDTH = 136;
+      const THRESH = 30;
+      let startX = 0;
+      let startY = 0;
+      let dx = 0;
+      let dy = 0;
+      let active = false;
+      let moving = false;
+      let swiped = false;
+      const resetActions = () => {
+        actions.style.transition = "";
+        actions.style.transform = "";
+        actions.style.opacity = "";
+      };
+      const begin = (x, y) => {
+        startX = x;
+        startY = y;
+        dx = 0;
+        dy = 0;
+        active = true;
+        moving = false;
+        swiped = false;
+      };
+      const move = (x, y) => {
+        if (!active) {
+          return;
+        }
+        dx = x - startX;
+        dy = y - startY;
+        if (!moving && Math.abs(dy) > 10 && Math.abs(dy) > Math.abs(dx)) {
+          active = false;
+          resetActions();
+          return;
+        }
+        if (!moving && Math.abs(dx) > 6) {
+          moving = true;
+        }
+        if (moving) {
+          const base = this.openRowId === id ? -WIDTH : 0;
+          const offset = Math.min(0, Math.max(-WIDTH, base + dx));
+          const reveal = -offset;
+          actions.style.transition = "none";
+          actions.style.transform = "translateX(" + (WIDTH - reveal) + "px)";
+          actions.style.opacity = String(Math.min(1, reveal / WIDTH));
+        }
+      };
+      const end = () => {
+        if (!active) {
+          return;
+        }
+        active = false;
+        resetActions();
+        if (moving && Math.abs(dx) > 8) {
+          swiped = true;
+          if (dx < -THRESH) {
+            this.setOpenRow(id);
+          } else if (dx > THRESH) {
+            this.setOpenRow("");
+          } else {
+            this.setOpenRow(this.openRowId === id ? "" : id);
+          }
+        }
+      };
+      content.addEventListener("click", (e) => {
+        if (swiped) {
+          swiped = false;
+          e.stopPropagation();
+          e.preventDefault();
+        }
+      }, true);
+      content.addEventListener("touchstart", (e) => {
+        const t = e.touches[0];
+        begin(t.clientX, t.clientY);
+      }, false);
+      content.addEventListener("touchmove", (e) => {
+        const t = e.touches[0];
+        if (moving && e.cancelable) {
+          e.preventDefault();
+        }
+        move(t.clientX, t.clientY);
+      }, { passive: false });
+      content.addEventListener("touchend", end, false);
+      content.addEventListener("touchcancel", end, false);
+      content.addEventListener("mousedown", (e) => begin(e.clientX, e.clientY), false);
+      content.addEventListener("mousemove", (e) => {
+        if (active) {
+          move(e.clientX, e.clientY);
+        }
+      }, false);
+      content.addEventListener("mouseup", end, false);
+      content.addEventListener("mouseleave", end, false);
+    }
+    startRename(row, id) {
+      let target = null;
+      for (let i = 0; i < this.sessions.length; i++) {
+        if (this.sessions[i].id === id) {
+          target = this.sessions[i];
+        }
+      }
+      if (!target) {
+        return;
+      }
+      const session = target;
+      this.setOpenRow("");
+      while (row.firstChild) {
+        row.removeChild(row.firstChild);
+      }
+      row.className = "session-row is-renaming";
+      const input = document.createElement("input");
+      input.type = "text";
+      input.className = "session-rename";
+      input.setAttribute("maxlength", "40");
+      input.value = session.title === "\u65B0\u5BF9\u8BDD" ? "" : session.title;
+      row.appendChild(input);
+      input.focus();
+      input.setSelectionRange(0, input.value.length);
+      let done = false;
+      const commit = (save) => {
+        if (done) {
+          return;
+        }
+        done = true;
+        if (save) {
+          const text = input.value.replace(/\s+/g, " ").trim();
+          session.title = text ? text.slice(0, 40) : this.titleFor(session.messages);
+          this.saveStore();
+        }
+        this.renderSessions();
+      };
+      input.addEventListener("keydown", (e) => {
+        if (e.key === "Enter") {
+          e.preventDefault();
+          commit(true);
+        } else if (e.key === "Escape") {
+          e.preventDefault();
+          commit(false);
+        }
+      }, false);
+      input.addEventListener("blur", () => commit(true), false);
+    }
     openDrawer() {
+      this.openRowId = "";
       this.renderSessions();
       this.drawerLayer.classList.add("is-open");
       this.drawerLayer.setAttribute("aria-hidden", "false");
     }
     closeDrawer() {
+      this.openRowId = "";
       this.drawerLayer.classList.remove("is-open");
       this.drawerLayer.setAttribute("aria-hidden", "true");
     }
@@ -2293,6 +2519,9 @@ svg { display: block; }
         return;
       }
       const wasCurrent = id === this.currentId;
+      if (this.openRowId === id) {
+        this.openRowId = "";
+      }
       this.sessions.splice(idx, 1);
       if (!this.sessions.length) {
         this.sessions.push(this.makeSession([]));

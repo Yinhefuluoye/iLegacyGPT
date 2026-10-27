@@ -765,33 +765,64 @@ svg { display: block; }
 .drawer-layer.is-open .drawer { transform: translateX(0); }
 .drawer-head { display: flex; align-items: center; justify-content: space-between; padding: 14px 10px 6px; }
 .drawer-head h2 { font-size: 13px; font-weight: 500; letter-spacing: 2px; color: rgba(27, 29, 26, 0.38); }
-.drawer-list { flex: 1 1 auto; overflow-y: auto; -webkit-overflow-scrolling: touch; padding: 4px 0; }
+.drawer-list { flex: 1 1 auto; overflow-y: auto; -webkit-overflow-scrolling: touch; padding: 2px 0 6px; }
 .drawer-list::-webkit-scrollbar { width: 0; height: 0; }
-.session-row { display: flex; align-items: center; border-radius: 12px; }
-.session-row + .session-row { margin-top: 2px; }
-.session-row:hover { background: rgba(0, 0, 0, 0.035); }
-.session-row.is-active { background: rgba(185, 138, 75, 0.11); }
-.session-item {
-  flex: 1 1 auto; min-width: 0;
-  display: flex; align-items: center; gap: 8px;
-  padding: 11px 4px 11px 12px;
-  border: 0; background: none; font: inherit; color: #1b1d1a; text-align: left;
+.session-group {
+  padding: 12px 12px 5px;
+  font-size: 11px; letter-spacing: 1.4px;
+  color: rgba(27, 29, 26, 0.32);
 }
+.session-group:first-child { padding-top: 4px; }
+.session-row { position: relative; overflow: hidden; border-radius: 12px; background: #fff; }
+.session-row + .session-row { margin-top: 2px; }
+.session-actions {
+  position: absolute; top: 0; right: 0; bottom: 0;
+  display: flex; align-items: stretch; width: 136px;
+  z-index: 2;
+  opacity: 0; pointer-events: none;
+  transform: translateX(14px);
+  transition: transform 0.18s cubic-bezier(0.22, 0.7, 0.28, 1), opacity 0.18s ease;
+}
+.session-row.is-open .session-actions { opacity: 1; pointer-events: auto; transform: translateX(0); }
+.session-act {
+  flex: 1 1 0; border: 0;
+  font: inherit; font-size: 13px;
+  color: #4a4d45; background: #f1f1eb;
+}
+.session-act + .session-act { margin-left: 1px; }
+.session-act.is-danger { color: #b3261e; background: #fbecea; }
+.session-act:active { filter: brightness(0.95); }
+.session-content {
+  position: relative; z-index: 1;
+  display: flex; align-items: center; gap: 8px;
+  width: 100%; margin: 0;
+  padding: 11px 12px;
+  border: 0; border-radius: 12px;
+  background: #fff;
+  font: inherit; font-size: 15px; color: #1b1d1a; text-align: left;
+  -webkit-user-select: none; user-select: none;
+  touch-action: pan-y;
+  transition: transform 0.18s cubic-bezier(0.22, 0.7, 0.28, 1), padding 0.18s cubic-bezier(0.22, 0.7, 0.28, 1);
+}
+.session-row:hover .session-content { background: rgba(0, 0, 0, 0.035); }
+.session-row.is-active .session-content { background: rgba(185, 138, 75, 0.11); }
+.session-row.is-open .session-content { padding-right: 148px; }
 .session-title {
   flex: 1 1 auto; min-width: 0;
   overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
   font-size: 15px;
 }
 .session-time { flex-shrink: 0; font-size: 12px; color: rgba(27, 29, 26, 0.34); }
-.session-del {
-  flex-shrink: 0; width: 28px; height: 28px; margin-right: 6px;
-  border-radius: 50%; font-size: 16px; line-height: 1;
-  color: rgba(27, 29, 26, 0.32); opacity: 0.55;
+.session-rename {
+  width: 100%; margin: 0;
+  padding: 10px 12px;
+  border: 1px solid rgba(185, 138, 75, 0.5); border-radius: 12px;
+  background: #fff;
+  font: inherit; font-size: 15px; color: #1b1d1a;
+  outline: none;
 }
-.session-row:hover .session-del,
-.session-row.is-active .session-del { opacity: 1; }
-.session-del:hover { background: rgba(0, 0, 0, 0.06); color: #b3261e; }
 .drawer-foot { padding: 8px 4px 2px; border-top: 1px solid rgba(0, 0, 0, 0.06); }
+.drawer-hint { padding: 2px 12px 6px; font-size: 11px; color: rgba(27, 29, 26, 0.30); }
 .drawer-new {
   display: flex; align-items: center; gap: 8px; width: 100%;
   padding: 11px 12px; border-radius: 12px; border: 0; background: none;
@@ -836,6 +867,7 @@ svg { display: block; }
       </div>
       <div class="drawer-list" id="sessionList"></div>
       <div class="drawer-foot">
+        <div class="drawer-hint">左滑会话可重命名或删除</div>
         <button class="drawer-new" id="drawerNew" type="button">
           <span class="drawer-new-plus">+</span><span>新对话</span>
         </button>
@@ -1696,39 +1728,61 @@ svg { display: block; }
 }());
 </script>
 <script>
-/* 会话抽屉演示：?demo=drawer 打开抽屉并填入示例会话 */
+/* 会话抽屉演示：?demo=drawer 打开抽屉并填入示例会话；?demo=drawerswipe 展示左滑操作 */
 (function () {
-  if (String(location.search).indexOf('drawer') < 0) { return; }
-  var demo = [
-    ['整理 iPad 客户端的会话结构', '刚刚', true],
-    ['把思考档位加到输入框', '昨天', false],
-    ['OpenAI 兼容接口的流式解析', '10月26日', false],
-    ['确认浅色主题的配色', '10月25日', false],
-    ['图片上传的压缩参数', '10月24日', false]
+  var q = String(location.search);
+  if (q.indexOf('drawer') < 0) { return; }
+  var groups = [
+    ['今天', [
+      ['整理 iPad 客户端的会话结构', '00:14', true],
+      ['把思考档位加到输入框', '昨天', false]
+    ]],
+    ['近 7 天', [
+      ['OpenAI 兼容接口的流式解析', '10月26日', false]
+    ]],
+    ['更早', [
+      ['确认浅色主题的配色', '10月25日', false],
+      ['图片上传的压缩参数', '10月24日', false]
+    ]]
   ];
   var list = document.getElementById('sessionList');
-  for (var i = 0; i < demo.length; i++) {
-    var row = document.createElement('div');
-    row.className = 'session-row' + (demo[i][2] ? ' is-active' : '');
-    var item = document.createElement('button');
-    item.type = 'button';
-    item.className = 'session-item';
-    var title = document.createElement('span');
-    title.className = 'session-title';
-    title.textContent = demo[i][0];
-    var time = document.createElement('span');
-    time.className = 'session-time';
-    time.textContent = demo[i][1];
-    item.appendChild(title);
-    item.appendChild(time);
-    var del = document.createElement('button');
-    del.type = 'button';
-    del.className = 'session-del';
-    del.textContent = '\u00d7';
-    del.setAttribute('aria-label', '删除会话');
-    row.appendChild(item);
-    row.appendChild(del);
-    list.appendChild(row);
+  for (var g = 0; g < groups.length; g++) {
+    var head = document.createElement('div');
+    head.className = 'session-group';
+    head.textContent = groups[g][0];
+    list.appendChild(head);
+    var rows = groups[g][1];
+    for (var i = 0; i < rows.length; i++) {
+      var open = (q.indexOf('swipe') >= 0 && g === 0 && i === 1);
+      var row = document.createElement('div');
+      row.className = 'session-row' + (rows[i][2] ? ' is-active' : '') + (open ? ' is-open' : '');
+      var actions = document.createElement('div');
+      actions.className = 'session-actions';
+      var rename = document.createElement('button');
+      rename.type = 'button';
+      rename.className = 'session-act';
+      rename.textContent = '重命名';
+      var del = document.createElement('button');
+      del.type = 'button';
+      del.className = 'session-act is-danger';
+      del.textContent = '删除';
+      actions.appendChild(rename);
+      actions.appendChild(del);
+      var content = document.createElement('button');
+      content.type = 'button';
+      content.className = 'session-content';
+      var title = document.createElement('span');
+      title.className = 'session-title';
+      title.textContent = rows[i][0];
+      var time = document.createElement('span');
+      time.className = 'session-time';
+      time.textContent = rows[i][1];
+      content.appendChild(title);
+      content.appendChild(time);
+      row.appendChild(actions);
+      row.appendChild(content);
+      list.appendChild(row);
+    }
   }
   document.getElementById('drawerLayer').classList.add('is-open');
   document.getElementById('drawerLayer').setAttribute('aria-hidden', 'false');

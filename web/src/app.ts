@@ -73,6 +73,7 @@ export class App {
   private messages: Message[] = [];
   private sessions: Session[] = [];
   private currentId = '';
+  private openRowId = '';
   private requestId = '';
   private streaming = false;
   private attach: { dataBase64: string; mime: string; bytes?: number } | null = null;
@@ -240,17 +241,28 @@ export class App {
       const target = e.target as HTMLElement;
       const row = target.closest ? (target.closest('.session-row') as HTMLElement | null) : null;
       if (!row) {
+        this.setOpenRow('');
         return;
       }
       const id = row.getAttribute('data-id') || '';
       if (!id) {
         return;
       }
-      if (target.classList && target.classList.contains('session-del')) {
-        this.deleteSession(id);
+      if (target.closest && target.closest('.session-act')) {
+        if (target.closest('.is-danger')) {
+          this.deleteSession(id);
+        } else {
+          this.startRename(row, id);
+        }
         return;
       }
-      this.switchSession(id);
+      if (target.closest && target.closest('.session-content')) {
+        if (this.openRowId === id) {
+          this.setOpenRow('');
+          return;
+        }
+        this.switchSession(id);
+      }
     });
     this.on(window, 'keydown', (e: any) => {
       if (e.key === 'Escape' && this.drawerLayer.classList.contains('is-open')) {
@@ -942,30 +954,225 @@ export class App {
     }
     this.sessionList.innerHTML = '';
     const sorted = this.sessions.slice().sort((a, b) => (b.updatedAt || 0) - (a.updatedAt || 0));
+    let lastGroup = '';
     for (let i = 0; i < sorted.length; i++) {
       const s = sorted[i];
-      const row = el('div', 'session-row' + (s.id === this.currentId ? ' is-active' : ''));
+      const group = this.groupFor(s.updatedAt);
+      if (group !== lastGroup) {
+        this.sessionList.appendChild(el('div', 'session-group', group));
+        lastGroup = group;
+      }
+      const row = el('div', 'session-row' + (s.id === this.currentId ? ' is-active' : '') + (s.id === this.openRowId ? ' is-open' : ''));
       row.setAttribute('data-id', s.id);
-      const item = el('button', 'session-item') as HTMLButtonElement;
-      item.type = 'button';
-      item.appendChild(el('span', 'session-title', s.title || '新对话'));
-      item.appendChild(el('span', 'session-time', this.sessionTime(s.updatedAt)));
-      const del = el('button', 'session-del', '×') as HTMLButtonElement;
+
+      const actions = el('div', 'session-actions');
+      const rename = el('button', 'session-act', '重命名') as HTMLButtonElement;
+      rename.type = 'button';
+      const del = el('button', 'session-act is-danger', '删除') as HTMLButtonElement;
       del.type = 'button';
-      del.setAttribute('aria-label', '删除会话');
-      row.appendChild(item);
-      row.appendChild(del);
+      actions.appendChild(rename);
+      actions.appendChild(del);
+
+      const content = el('button', 'session-content') as HTMLButtonElement;
+      content.type = 'button';
+      content.appendChild(el('span', 'session-title', s.title || '新对话'));
+      content.appendChild(el('span', 'session-time', this.sessionTime(s.updatedAt)));
+
+      row.appendChild(actions);
+      row.appendChild(content);
       this.sessionList.appendChild(row);
+      this.bindRowGesture(content, actions, s.id);
     }
   }
 
+  private groupFor(ts: number): string {
+    const value = ts || 0;
+    const now = new Date();
+    const startOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime();
+    if (value >= startOfToday) {
+      return '今天';
+    }
+    if (value >= startOfToday - 6 * 86400000) {
+      return '近 7 天';
+    }
+    return '更早';
+  }
+
+  private setOpenRow(id: string): void {
+    this.openRowId = id;
+    if (!this.sessionList) {
+      return;
+    }
+    const rows = this.sessionList.querySelectorAll('.session-row') as any;
+    for (let i = 0; i < rows.length; i++) {
+      const row = rows[i] as HTMLElement;
+      const rowId = row.getAttribute('data-id') || '';
+      row.classList.toggle('is-open', !!id && rowId === id);
+      const content = row.querySelector('.session-content') as HTMLElement | null;
+      if (content) {
+        content.style.transform = '';
+      }
+    }
+  }
+
+  private bindRowGesture(content: HTMLElement, actions: HTMLElement, id: string): void {
+    const WIDTH = 136;
+    const THRESH = 30;
+    let startX = 0;
+    let startY = 0;
+    let dx = 0;
+    let dy = 0;
+    let active = false;
+    let moving = false;
+    let swiped = false;
+
+    const resetActions = () => {
+      actions.style.transition = '';
+      actions.style.transform = '';
+      actions.style.opacity = '';
+    };
+    const begin = (x: number, y: number) => {
+      startX = x;
+      startY = y;
+      dx = 0;
+      dy = 0;
+      active = true;
+      moving = false;
+      swiped = false;
+    };
+    const move = (x: number, y: number) => {
+      if (!active) {
+        return;
+      }
+      dx = x - startX;
+      dy = y - startY;
+      if (!moving && Math.abs(dy) > 10 && Math.abs(dy) > Math.abs(dx)) {
+        // vertical scroll wins over the swipe
+        active = false;
+        resetActions();
+        return;
+      }
+      if (!moving && Math.abs(dx) > 6) {
+        moving = true;
+      }
+      if (moving) {
+        const base = this.openRowId === id ? -WIDTH : 0;
+        const offset = Math.min(0, Math.max(-WIDTH, base + dx));
+        const reveal = -offset;
+        actions.style.transition = 'none';
+        actions.style.transform = 'translateX(' + (WIDTH - reveal) + 'px)';
+        actions.style.opacity = String(Math.min(1, reveal / WIDTH));
+      }
+    };
+    const end = () => {
+      if (!active) {
+        return;
+      }
+      active = false;
+      resetActions();
+      if (moving && Math.abs(dx) > 8) {
+        swiped = true;
+        if (dx < -THRESH) {
+          this.setOpenRow(id);
+        } else if (dx > THRESH) {
+          this.setOpenRow('');
+        } else {
+          this.setOpenRow(this.openRowId === id ? '' : id);
+        }
+      }
+    };
+
+    // a swipe must not be turned into a tap by the synthetic click
+    content.addEventListener('click', (e: any) => {
+      if (swiped) {
+        swiped = false;
+        e.stopPropagation();
+        e.preventDefault();
+      }
+    }, true);
+
+    content.addEventListener('touchstart', (e: any) => {
+      const t = e.touches[0];
+      begin(t.clientX, t.clientY);
+    }, false);
+    content.addEventListener('touchmove', (e: any) => {
+      const t = e.touches[0];
+      if (moving && e.cancelable) {
+        e.preventDefault();
+      }
+      move(t.clientX, t.clientY);
+    }, { passive: false } as any);
+    content.addEventListener('touchend', end, false);
+    content.addEventListener('touchcancel', end, false);
+    content.addEventListener('mousedown', (e: any) => begin(e.clientX, e.clientY), false);
+    content.addEventListener('mousemove', (e: any) => {
+      if (active) {
+        move(e.clientX, e.clientY);
+      }
+    }, false);
+    content.addEventListener('mouseup', end, false);
+    content.addEventListener('mouseleave', end, false);
+  }
+
+  private startRename(row: HTMLElement, id: string): void {
+    let target: Session | null = null;
+    for (let i = 0; i < this.sessions.length; i++) {
+      if (this.sessions[i].id === id) {
+        target = this.sessions[i];
+      }
+    }
+    if (!target) {
+      return;
+    }
+    const session = target;
+    this.setOpenRow('');
+    while (row.firstChild) {
+      row.removeChild(row.firstChild);
+    }
+    row.className = 'session-row is-renaming';
+    const input = document.createElement('input');
+    input.type = 'text';
+    input.className = 'session-rename';
+    input.setAttribute('maxlength', '40');
+    input.value = session.title === '新对话' ? '' : session.title;
+    row.appendChild(input);
+    input.focus();
+    input.setSelectionRange(0, input.value.length);
+
+    let done = false;
+    const commit = (save: boolean) => {
+      if (done) {
+        return;
+      }
+      done = true;
+      if (save) {
+        const text = input.value.replace(/\s+/g, ' ').trim();
+        session.title = text ? text.slice(0, 40) : this.titleFor(session.messages);
+        this.saveStore();
+      }
+      this.renderSessions();
+    };
+    input.addEventListener('keydown', (e: any) => {
+      if (e.key === 'Enter') {
+        e.preventDefault();
+        commit(true);
+      } else if (e.key === 'Escape') {
+        e.preventDefault();
+        commit(false);
+      }
+    }, false);
+    input.addEventListener('blur', () => commit(true), false);
+  }
+
   private openDrawer(): void {
+    this.openRowId = '';
     this.renderSessions();
     this.drawerLayer.classList.add('is-open');
     this.drawerLayer.setAttribute('aria-hidden', 'false');
   }
 
   private closeDrawer(): void {
+    this.openRowId = '';
     this.drawerLayer.classList.remove('is-open');
     this.drawerLayer.setAttribute('aria-hidden', 'true');
   }
@@ -1005,6 +1212,9 @@ export class App {
       return;
     }
     const wasCurrent = id === this.currentId;
+    if (this.openRowId === id) {
+      this.openRowId = '';
+    }
     this.sessions.splice(idx, 1);
     if (!this.sessions.length) {
       this.sessions.push(this.makeSession([]));

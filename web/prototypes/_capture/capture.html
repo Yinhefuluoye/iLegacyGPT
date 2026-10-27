@@ -127,9 +127,21 @@
         click('#modelChip');
       } else if (act === 'drawerswitch') {
         click('#menuBtn');
-        var rows = doc.querySelectorAll('.session-row .session-item');
+        var rows = doc.querySelectorAll('.session-content');
         if (!rows[1]) { throw new Error('missing second session'); }
         rows[1].click();
+      } else if (act === 'drawerswipe') {
+        click('#menuBtn');
+        var swRows = doc.querySelectorAll('.session-row');
+        if (!swRows[1]) { throw new Error('missing second row'); }
+        swRows[1].classList.add('is-open');
+      } else if (act === 'drawerrename') {
+        click('#menuBtn');
+        var rRows = doc.querySelectorAll('.session-row');
+        if (!rRows[1]) { throw new Error('missing second row'); }
+        var rActs = rRows[1].querySelectorAll('.session-act');
+        if (!rActs[0]) { throw new Error('missing rename action'); }
+        rActs[0].click();
       } else if (act === 'drawer') {
         click('#menuBtn');
       } else if (act === 'thinkmenu') {

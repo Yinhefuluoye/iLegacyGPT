@@ -11,7 +11,7 @@
 
 No account, no login, no telemetry — it talks to any OpenAI-compatible endpoint, and your API key never leaves your own device.
 
-`v1.1.0` · Objective-C + TypeScript · MIT
+`v1.1.1` · Objective-C + TypeScript · MIT
 
 </div>
 
@@ -61,7 +61,7 @@ It **ships no API and no keys**. You point it at your own OpenAI-compatible serv
 
 > Requires **AppSync Unified** or a self-signing tool — the IPA is unsigned.
 
-1. Download `iLegacyGPT-1.1.0.ipa` from [Releases](../../releases);
+1. Download `iLegacyGPT-1.1.1.ipa` from [Releases](../../releases);
 2. Install with i4Tools / ipatool / any self-signing tool;
 3. Open the app → settings (top right) → fill in **provider, base URL, port, API key**, then refresh the model list.
 
@@ -88,11 +88,11 @@ See [PRIVACY.md](PRIVACY.md) (Chinese).
 **Toolchain**: WSL (Ubuntu 22.04) + Theos + iPhoneOS 10.3 SDK + Swift toolchain — see [docs/build-wsl.md](docs/build-wsl.md) (Chinese).
 
 ```bash
-VERSION=1.1.0 bash tools/build_local.sh
-python tools/package_ipa.py --app ios/.theos/obj/iphone/8.0/ChatAI.app --version 1.1.0 --name iLegacyGPT
+VERSION=1.1.1 bash tools/build_local.sh
+python tools/package_ipa.py --app ios/.theos/obj/iphone/8.0/ChatAI.app --version 1.1.1 --name iLegacyGPT
 ```
 
-Output: `dist/iLegacyGPT-1.1.0.ipa` (~100 KB).
+Output: `dist/iLegacyGPT-1.1.1.ipa` (~100 KB).
 
 There is **no CI**: releases are built locally in about five seconds.
 

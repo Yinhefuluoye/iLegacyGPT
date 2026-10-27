@@ -11,7 +11,7 @@
 
 无登录、无账号、无遥测；直接连接任意 OpenAI 兼容接口，API Key 只存在你自己的设备里。
 
-`v1.1.0` · Objective-C + TypeScript · MIT
+`v1.1.1` · Objective-C + TypeScript · MIT
 
 </div>
 
@@ -61,7 +61,7 @@
 
 > 需要设备已安装 **AppSync Unified**（或使用自签名工具重签），否则无法安装未签名 IPA。
 
-1. 到 [Releases](../../releases) 下载 `iLegacyGPT-1.1.0.ipa`；
+1. 到 [Releases](../../releases) 下载 `iLegacyGPT-1.1.1.ipa`；
 2. 用爱思助手 / ipatool / 自签名工具安装；
 3. 打开 App → 右上角设置 → 填写 **provider、Base URL、端口、API Key**，拉一次模型列表。
 
@@ -88,11 +88,11 @@
 **环境**：WSL（Ubuntu 22.04）+ Theos + iPhoneOS10.3 SDK + Swift toolchain（详见 [docs/build-wsl.md](docs/build-wsl.md)）。
 
 ```bash
-VERSION=1.1.0 bash tools/build_local.sh
-python tools/package_ipa.py --app ios/.theos/obj/iphone/8.0/ChatAI.app --version 1.1.0 --name iLegacyGPT
+VERSION=1.1.1 bash tools/build_local.sh
+python tools/package_ipa.py --app ios/.theos/obj/iphone/8.0/ChatAI.app --version 1.1.1 --name iLegacyGPT
 ```
 
-产物：`dist/iLegacyGPT-1.1.0.ipa`（约 100 KB）。
+产物：`dist/iLegacyGPT-1.1.1.ipa`（约 100 KB）。
 
 本项目**不使用 CI**：出包全靠本地脚本，WSL 里约 5 秒完成。
 

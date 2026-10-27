@@ -77,7 +77,8 @@
     var mode = parts[2] || '';
     var w = viewport === 'portrait' ? 768 : 1024;
     var h = viewport === 'portrait' ? 1024 : 768;
-    var demo = (mode === 'chat' || mode === 'models' || mode === 'settings' || mode === 'drawer') ? '?demo=' + mode : '';
+    var demoModes = ['chat', 'models', 'settings', 'drawer', 'search', 'table'];
+    var demo = demoModes.indexOf(mode) >= 0 ? '?demo=' + mode : '';
 
     log('START ' + shot + ' ' + w + 'x' + h);
     var iframe = document.createElement('iframe');
@@ -182,7 +183,15 @@
       /* Live DOM property values (typed textarea content) are not reflected in
          the serialized markup; copy them into the DOM before serializing. */
       syncFormValues(doc);
-      var html = new XMLSerializer().serializeToString(doc.documentElement);
+      /* The inlined app bundle lives in a <script> inside the document; it is
+         dead weight for a static image and, since the ES5 build, large enough
+         to blow up the SVG data URL. Screenshot a script-free clone. */
+      var clone = doc.documentElement.cloneNode(true);
+      var scripts = clone.querySelectorAll('script');
+      for (var si = 0; si < scripts.length; si++) {
+        if (scripts[si].parentNode) { scripts[si].parentNode.removeChild(scripts[si]); }
+      }
+      var html = new XMLSerializer().serializeToString(clone);
       if (html.indexOf('xmlns=') === -1) {
         html = html.replace('<html', '<html xmlns="http://www.w3.org/1999/xhtml"');
       }

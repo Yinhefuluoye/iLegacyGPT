@@ -1,28 +1,30 @@
-# 隐私说明
+# Privacy
 
-一句话：**这个 App 不收集任何东西，也没有服务器。**
+English | [简体中文](PRIVACY.zh-CN.md)
 
-## 存了什么、存在哪
+In one sentence: **this app collects nothing and has no server of its own.**
 
-| 数据 | 位置 | 说明 |
+## What is stored, and where
+
+| Data | Location | Notes |
 | --- | --- | --- |
-| API Key、provider、Base URL、端口、模型名、字体大小、思考档位 | App 沙盒 `Library/Application Support/ChatAI/config` | 仅本机，卸载即清除 |
-| 会话与消息（含 320px 图片缩略图） | App 沙盒 `Library/Application Support/ChatAI/store.json` | 仅本机；最多保留每个会话最近 120 条、消息最多 200 条 |
-| 调试日志 | App 沙盒内日志文件 | 仅本机，用于排查问题 |
+| API key, provider, base URL, port, model name, font size, reasoning level | app sandbox `Library/Application Support/ChatAI/config` | device only, removed when the app is deleted |
+| Sessions and messages (including 320 px image thumbnails) | app sandbox `Library/Application Support/ChatAI/store.json` | device only; history is capped at the latest 120 entries per session and 200 messages |
+| Debug log | a log file inside the app sandbox | device only, used for troubleshooting |
 
-## 发出的请求
+## Requests it makes
 
-- 只有你在 App 内**主动发送消息**时，App 才会向你**自己配置**的接口发起请求；
-- 请求内容：你输入的文字、选中的图片（原图，最长边压到 1568px）、以及对话历史；
-- 请求目标：你填的 Base URL / 端口，本项目作者**不参与**、也看不到这些请求。
+- A request is sent **only when you press send**, and only to the endpoint **you configured**;
+- Request content: the text you typed, the image you attached (downscaled so the long side is at most 1568 px), and the conversation history;
+- Destination: the base URL and port you entered. The author of this project is not involved and cannot see those requests.
 
-## 不做什么
+## What it does not do
 
-- 无账号体系、无登录；
-- 无遥测、无埋点、无崩溃上报；
-- 不读取通讯录、定位、剪贴板；
-- 不向任何第三方服务器上传数据（除了你自己配置的那个接口）。
+- no account, no login;
+- no telemetry, no analytics, no crash reporting;
+- no access to contacts, location or the clipboard;
+- no upload to any third-party server, other than the endpoint you configured yourself.
 
-## 注意事项
+## Keep in mind
 
-你填写的接口提供方可能会记录你的请求，这取决于对方的隐私政策，与本项目无关。请勿在不可信的第三方网关里传输敏感信息。
+The provider you configure may log your requests according to its own privacy policy; that is outside this project. Do not send sensitive data through a gateway you do not trust.

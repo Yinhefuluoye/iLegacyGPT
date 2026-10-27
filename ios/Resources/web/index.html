@@ -1518,12 +1518,21 @@ svg { display: block; }
             }
             if (op === "chat.start") {
               var rid_1 = payload.requestId;
-              var text_1 = MOCK_REPLY;
-              var reasoning_1 = MOCK_REASONING;
+              var searching = DEMO_MODE === "search";
+              var text_1 = DEMO_MODE === "table" ? MOCK_TABLE_REPLY : searching ? MOCK_SEARCH_REPLY : MOCK_REPLY;
+              var reasoning_1 = DEMO_MODE === "table" || searching ? "" : MOCK_REASONING;
               var ri_1 = 0;
               var i_1 = 0;
               if (this.mockTimer) {
                 window.clearInterval(this.mockTimer);
+              }
+              if (searching) {
+                window.setTimeout(function() {
+                  self.receive({ type: "searching", requestId: rid_1 });
+                }, 150);
+                window.setTimeout(function() {
+                  self.receive({ type: "sources", requestId: rid_1, items: MOCK_SOURCES });
+                }, 500);
               }
               this.mockTimer = window.setInterval(function() {
                 if (ri_1 < reasoning_1.length) {
@@ -1645,11 +1654,46 @@ svg { display: block; }
         model: "deepseek-chat",
         models: ["deepseek-chat", "deepseek-reasoner", "gpt-4o-mini"],
         thinking: { enabled: false, level: 0, param: "reasoning_effort", onValue: "high", offValue: "" },
+        search: {
+          mode: "auto",
+          url: "https://api.exa.ai/search",
+          key: "",
+          header: "x-api-key",
+          prefix: "",
+          body: '{"query":"{{query}}","numResults":{{num}},"contents":{"text":{"maxCharacters":800}}}',
+          num: 5
+        },
         fontSize: 16
       };
       var MOCK_MODELS = ["deepseek-chat", "deepseek-reasoner", "gpt-4o-mini", "qwen-max"];
       var MOCK_REPLY = "\u597D\u7684\uFF0C\u5148\u7ED9\u4F60\u4E00\u4E2A\u6700\u5C0F\u53EF\u884C\u65B9\u6848\uFF1A\n\n- \u754C\u9762\u53EA\u4FDD\u7559\u4E00\u4E2A\u8F93\u5165\u5165\u53E3\u548C\u4E00\u5904\u8BBE\u7F6E\n- \u7F51\u7EDC\u5C42\u53EA\u505A\u4E00\u4E2A\u8F6C\u53D1\u63A5\u53E3\uFF0C\u4E0D\u505A\u8D26\u53F7\u4F53\u7CFB\n- \u914D\u7F6E\u5168\u90E8\u5B58\u5728\u672C\u673A\uFF0C\u6362\u6A21\u578B\u65F6\u4E0D\u6539\u52A8\u754C\u9762\n\n\u9700\u8981\u6211\u628A\u5B83\u62C6\u6210\u53EF\u6267\u884C\u7684\u4EFB\u52A1\u6E05\u5355\u5417\uFF1F";
       var MOCK_REASONING = "\u5148\u770B\u7EA6\u675F\uFF1A32 \u4F4D\u8BBE\u5907\u3001iOS 10\u3001WKWebView \u53EA\u8D1F\u8D23\u6E32\u67D3\u3002\u754C\u9762\u8D8A\u5C11\u8D8A\u597D\uFF0C\u6240\u4EE5\u6838\u5FC3\u662F\u8F93\u5165\u6846 + \u4E00\u5904\u8BBE\u7F6E\u3002\u7F51\u7EDC\u5C42\u53EA\u505A\u8F6C\u53D1\uFF0C\u4E0D\u5F15\u5165\u8D26\u53F7\u4F53\u7CFB\uFF0C\u914D\u7F6E\u7559\u5728\u672C\u673A\u5373\u53EF\u3002";
+      var DEMO_MODE = (function() {
+        var m = typeof location !== "undefined" ? /[?&]demo=([a-z]+)/.exec(location.search) : null;
+        return m ? m[1] : "";
+      })();
+      var MOCK_SOURCES = [
+        {
+          index: 1,
+          title: "\u7AEF\u4FA7\u63A8\u7406\u82AF\u7247\u53D1\u5E03\uFF1A\u80FD\u6548\u6BD4\u63D0\u5347 3 \u500D",
+          url: "https://example.com/news/chip",
+          snippet: "\u65B0\u82AF\u7247\u4E3B\u6253\u4F4E\u529F\u8017\u63A8\u7406\uFF0C\u5B98\u65B9\u7ED9\u51FA\u7684\u6570\u636E\u662F\u540C\u7B49\u529F\u8017\u4E0B\u541E\u5410\u63D0\u5347\u4E09\u500D\u3002"
+        },
+        {
+          index: 2,
+          title: "\u517C\u5BB9 32 \u4F4D ARM \u7684\u5F00\u6E90\u63A8\u7406\u8FD0\u884C\u65F6",
+          url: "https://example.com/blog/arm32-runtime",
+          snippet: "\u9879\u76EE README \u8BF4\u660E\u5B83\u652F\u6301 armv7 \u4E0E arm64\uFF0C\u5E76\u7ED9\u51FA\u4E86\u8001\u8BBE\u5907\u4E0A\u7684\u57FA\u51C6\u6570\u636E\u3002"
+        },
+        {
+          index: 3,
+          title: "\u5728\u8001 iPad \u4E0A\u8DD1\u5927\u6A21\u578B\u662F\u4EC0\u4E48\u4F53\u9A8C",
+          url: "https://example.com/post/ipad-llm",
+          snippet: "\u4F5C\u8005\u7528\u4E00\u53F0 iPad 4 \u505A\u4E86\u4E24\u5468\u5B9E\u6D4B\uFF0C\u8BB0\u5F55\u4E86\u53D1\u70ED\u3001\u8017\u7535\u4E0E\u54CD\u5E94\u901F\u5EA6\u3002"
+        }
+      ];
+      var MOCK_SEARCH_REPLY = "\u6839\u636E\u521A\u624D\u68C0\u7D22\u5230\u7684\u4E09\u6761\u8D44\u6599\uFF0C\u4ECA\u5929\u503C\u5F97\u5173\u6CE8\u7684\u79D1\u6280\u65B0\u95FB\u662F\uFF1A\n\n1. \u6709\u5382\u5546\u53D1\u5E03\u4E86\u65B0\u4E00\u4EE3**\u7AEF\u4FA7\u63A8\u7406\u82AF\u7247**\uFF0C\u4E3B\u6253\u540C\u7B49\u529F\u8017\u4E0B\u66F4\u9AD8\u7684\u541E\u5410[1]\uFF1B\n2. \u5F00\u6E90\u793E\u533A\u653E\u51FA\u4E86\u517C\u5BB9 **32 \u4F4D ARM** \u7684\u63A8\u7406\u8FD0\u884C\u65F6\uFF0C\u9644\u5E26\u4E86\u8001\u8BBE\u5907\u57FA\u51C6[2]\uFF1B\n3. \u4E00\u7BC7\u590D\u76D8\u6587\u7AE0\u8BB0\u5F55\u4E86\u5728 iPad 4 \u4E0A\u8DD1\u5927\u6A21\u578B\u4E24\u5468\u7684\u771F\u5B9E\u4F53\u9A8C[3]\u3002\n\n\u4F60\u66F4\u5173\u5FC3\u54EA\u4E00\u6761\uFF1F\u6211\u53EF\u4EE5\u628A\u7EC6\u8282\u5C55\u5F00\uFF0C\u6216\u8005\u7EE7\u7EED\u68C0\u7D22\u5B83\u7684\u540E\u7EED\u62A5\u9053\u3002";
+      var MOCK_TABLE_REPLY = "\u4E09\u6863\u65B9\u6848\u5BF9\u6BD4\u5982\u4E0B\uFF1A\n\n| \u65B9\u6848 | \u6210\u672C | \u9002\u5408\u573A\u666F |\n|:---|:---:|---:|\n| \u53EA\u6539\u4EA4\u4E92 | \u4F4E | \u73B0\u6709\u4F53\u9A8C\u5FAE\u8C03 |\n| \u91CD\u505A\u9996\u9875 | \u4E2D | \u4FE1\u606F\u67B6\u6784\u6DF7\u4E71 |\n| \u6362\u6280\u672F\u6808 | \u9AD8 | \u957F\u671F\u7EF4\u62A4 |\n\n\u6267\u884C\u987A\u5E8F\uFF1A\n\n- [x] \u68B3\u7406\u73B0\u6709\u4EA4\u4E92\n- [ ] \u7EDF\u4E00\u8BBE\u7F6E\u5165\u53E3\n- [ ] \u8865\u4E0A\u6765\u6E90\u5217\u8868\n\n\u9700\u8981\u6211\u628A\u7B2C\u4E8C\u6863\u62C6\u6210\u5177\u4F53\u4EFB\u52A1\u5417\uFF1F";
     }
   });
 

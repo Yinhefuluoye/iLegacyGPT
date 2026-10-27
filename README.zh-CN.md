@@ -35,6 +35,10 @@
 | --- | --- | --- | --- |
 | <img src="docs/screenshots/01-home.png" width="220"> | <img src="docs/screenshots/02-thinking.png" width="260"> | <img src="docs/screenshots/03-sessions.png" width="260"> | <img src="docs/screenshots/04-settings.png" width="260"> |
 
+| 联网搜索（带来源列表） | Markdown 表格与任务列表 | 图片发送 |
+| --- | --- | --- |
+| <img src="docs/screenshots/06-search.png" width="260"> | <img src="docs/screenshots/07-table.png" width="420"> | <img src="docs/screenshots/05-image.png" width="260"> |
+
 ## 特性
 
 - **任意 OpenAI 兼容接口**：自定义 provider / Base URL / 端口 / API Key，模型列表自动拉取；
@@ -83,7 +87,7 @@
 - 图片仅在你点击发送时，随请求发往你配置的接口；
 - 卸载 App 即清除全部数据。
 
-详见 [PRIVACY.md](PRIVACY.md)。
+详见[隐私说明](PRIVACY.zh-CN.md)与[安全说明](SECURITY.zh-CN.md)；English: [PRIVACY.md](PRIVACY.md) · [SECURITY.md](SECURITY.md)。
 
 ## 构建
 

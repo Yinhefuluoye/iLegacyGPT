@@ -129,12 +129,22 @@ export class Bridge {
     }
     if (op === 'chat.start') {
       const rid = payload.requestId;
-      const text = MOCK_REPLY;
-      const reasoning = MOCK_REASONING;
+      const searching = DEMO_MODE === 'search';
+      const text =
+        DEMO_MODE === 'table' ? MOCK_TABLE_REPLY : searching ? MOCK_SEARCH_REPLY : MOCK_REPLY;
+      const reasoning = DEMO_MODE === 'table' || searching ? '' : MOCK_REASONING;
       let ri = 0;
       let i = 0;
       if (this.mockTimer) {
         window.clearInterval(this.mockTimer);
+      }
+      if (searching) {
+        window.setTimeout(function () {
+          self.receive({ type: 'searching', requestId: rid });
+        }, 150);
+        window.setTimeout(function () {
+          self.receive({ type: 'sources', requestId: rid, items: MOCK_SOURCES });
+        }, 500);
       }
       this.mockTimer = window.setInterval(function () {
         if (ri < reasoning.length) {
@@ -261,6 +271,15 @@ export const MOCK_CONFIG: any = {
   model: 'deepseek-chat',
   models: ['deepseek-chat', 'deepseek-reasoner', 'gpt-4o-mini'],
   thinking: { enabled: false, level: 0, param: 'reasoning_effort', onValue: 'high', offValue: '' },
+  search: {
+    mode: 'auto',
+    url: 'https://api.exa.ai/search',
+    key: '',
+    header: 'x-api-key',
+    prefix: '',
+    body: '{"query":"{{query}}","numResults":{{num}},"contents":{"text":{"maxCharacters":800}}}',
+    num: 5
+  },
   fontSize: 16
 };
 
@@ -277,3 +296,51 @@ const MOCK_REASONING =
   '先看约束：32 位设备、iOS 10、WKWebView 只负责渲染。' +
   '界面越少越好，所以核心是输入框 + 一处设置。' +
   '网络层只做转发，不引入账号体系，配置留在本机即可。';
+
+/* Preview-only demo modes, selected with ?demo=search / ?demo=table. Used by
+   web/_preview/capture.html to screenshot the newer features without a gateway. */
+const DEMO_MODE = (function () {
+  const m = typeof location !== 'undefined' ? /[?&]demo=([a-z]+)/.exec(location.search) : null;
+  return m ? m[1] : '';
+}());
+
+const MOCK_SOURCES = [
+  {
+    index: 1,
+    title: '端侧推理芯片发布：能效比提升 3 倍',
+    url: 'https://example.com/news/chip',
+    snippet: '新芯片主打低功耗推理，官方给出的数据是同等功耗下吞吐提升三倍。'
+  },
+  {
+    index: 2,
+    title: '兼容 32 位 ARM 的开源推理运行时',
+    url: 'https://example.com/blog/arm32-runtime',
+    snippet: '项目 README 说明它支持 armv7 与 arm64，并给出了老设备上的基准数据。'
+  },
+  {
+    index: 3,
+    title: '在老 iPad 上跑大模型是什么体验',
+    url: 'https://example.com/post/ipad-llm',
+    snippet: '作者用一台 iPad 4 做了两周实测，记录了发热、耗电与响应速度。'
+  }
+];
+
+const MOCK_SEARCH_REPLY =
+  '根据刚才检索到的三条资料，今天值得关注的科技新闻是：\n\n' +
+  '1. 有厂商发布了新一代**端侧推理芯片**，主打同等功耗下更高的吞吐[1]；\n' +
+  '2. 开源社区放出了兼容 **32 位 ARM** 的推理运行时，附带了老设备基准[2]；\n' +
+  '3. 一篇复盘文章记录了在 iPad 4 上跑大模型两周的真实体验[3]。\n\n' +
+  '你更关心哪一条？我可以把细节展开，或者继续检索它的后续报道。';
+
+const MOCK_TABLE_REPLY =
+  '三档方案对比如下：\n\n' +
+  '| 方案 | 成本 | 适合场景 |\n' +
+  '|:---|:---:|---:|\n' +
+  '| 只改交互 | 低 | 现有体验微调 |\n' +
+  '| 重做首页 | 中 | 信息架构混乱 |\n' +
+  '| 换技术栈 | 高 | 长期维护 |\n\n' +
+  '执行顺序：\n\n' +
+  '- [x] 梳理现有交互\n' +
+  '- [ ] 统一设置入口\n' +
+  '- [ ] 补上来源列表\n\n' +
+  '需要我把第二档拆成具体任务吗？';

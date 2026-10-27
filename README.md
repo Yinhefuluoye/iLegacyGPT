@@ -35,6 +35,10 @@ It **ships no API and no keys**. You point it at your own OpenAI-compatible serv
 | --- | --- | --- | --- |
 | <img src="docs/screenshots/01-home.png" width="220"> | <img src="docs/screenshots/02-thinking.png" width="260"> | <img src="docs/screenshots/03-sessions.png" width="260"> | <img src="docs/screenshots/04-settings.png" width="260"> |
 
+| Web search with sources | Markdown tables and task lists | Image input |
+| --- | --- | --- |
+| <img src="docs/screenshots/06-search.png" width="260"> | <img src="docs/screenshots/07-table.png" width="420"> | <img src="docs/screenshots/05-image.png" width="260"> |
+
 ## Features
 
 - **Any OpenAI-compatible API** — configurable provider, base URL, port and key; model list fetched live;
@@ -83,7 +87,7 @@ It **ships no API and no keys**. You point it at your own OpenAI-compatible serv
 - images are uploaded only when you press send, and only to the endpoint you configured;
 - deleting the app wipes everything.
 
-See [PRIVACY.md](PRIVACY.md) (Chinese).
+See [PRIVACY.md](PRIVACY.md) and [SECURITY.md](SECURITY.md). 中文版：[隐私说明](PRIVACY.zh-CN.md) · [安全说明](SECURITY.zh-CN.md)
 
 ## Build
 

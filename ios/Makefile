@@ -8,6 +8,8 @@ APPLICATION_NAME = ChatAI
 ChatAI_FILES = $(wildcard ChatAI/*.m)
 ChatAI_FRAMEWORKS = UIKit Foundation WebKit CoreGraphics QuartzCore
 ChatAI_CFLAGS = -fobjc-arc -fblocks
+# armv7 exception handling on this toolchain uses the SjLj runtime
+ChatAI_LDFLAGS = -lgcc_s.1
 ChatAI_RESOURCE_DIRS = Resources
 
 include $(THEOS_MAKE_PATH)/application.mk

@@ -55,6 +55,7 @@ VERSION="${VERSION:-0.1.local}"
 python3 tools/package_ipa.py \
   --app "$APP" \
   --out dist \
+  --name "${NAME:-ChatAI}" \
   --version "$VERSION" \
   --bundle-version "$(date +%s)"
 

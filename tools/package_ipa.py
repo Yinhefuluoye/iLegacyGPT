@@ -29,6 +29,7 @@ def main():
     ap.add_argument("--out", default=os.path.join(PROJECT, "dist"))
     ap.add_argument("--version", default=None, help="CFBundleShortVersionString override")
     ap.add_argument("--bundle-version", default=None, help="CFBundleVersion override")
+    ap.add_argument("--name", default=APP_NAME, help="file name stem for the IPA")
     args = ap.parse_args()
 
     app = os.path.abspath(args.app)
@@ -57,7 +58,7 @@ def main():
         plistlib.dump(pl, f)
 
     os.makedirs(args.out, exist_ok=True)
-    ipa_name = "%s-%s.ipa" % (APP_NAME, pl.get("CFBundleShortVersionString", "0.0.0"))
+    ipa_name = "%s-%s.ipa" % (args.name, pl.get("CFBundleShortVersionString", "0.0.0"))
     ipa_path = os.path.abspath(os.path.join(args.out, ipa_name))
     if os.path.exists(ipa_path):
         os.remove(ipa_path)

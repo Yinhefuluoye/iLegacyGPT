@@ -956,11 +956,27 @@ svg { display: block; }
 }
 
 /* stop state for the send button while streaming */
-.send-btn.is-stop {
-  background: var(--send-bg, #22241f);
-  color: var(--send-fg, #f7f7f3);
+.send-btn.is-stop,
+.send-btn.is-stop[disabled] {
+  background: #4a4b45;
+  border-color: transparent;
+  color: #f6f6f2;
   opacity: 1;
+  cursor: pointer;
 }
+.send-btn.is-stop svg { display: none; }
+.stop-square {
+  display: none;
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 14px;
+  height: 14px;
+  margin: -7px 0 0 -7px;
+  border-radius: 3px;
+  background: currentColor;
+}
+.send-btn.is-stop .stop-square { display: block; }
 
 /* keyboard: native shrinks the web view, so the dock only needs its own padding */
 .dock {
@@ -997,12 +1013,13 @@ svg { display: block; }
   color: rgba(27, 29, 26, 0.62);
   white-space: pre-wrap;
   word-break: break-word;
-  max-height: 5em;
-  overflow: hidden;
+  max-height: 5.2em;
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
 }
 
 .reasoning.is-open .reasoning-body {
-  max-height: none;
+  max-height: 42vh;
 }
 
 /* thinking label colour, matches prototype tokens */
@@ -1137,6 +1154,7 @@ svg { display: block; }
                 <span class="think-dot"></span><span id="searchLabel">联网</span>
               </button>
               <button class="send-btn" id="sendBtn" type="button" aria-label="发送" disabled>
+                <span class="stop-square" aria-hidden="true"></span>
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
                   <path d="M12 19V5"></path>
                   <path d="M6 11l6-6 6 6"></path>

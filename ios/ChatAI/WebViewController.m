@@ -480,8 +480,10 @@ static id SearchValueAtPath(id object, NSString *path) {
         }
         NSString *final = context.length
             ? [NSString stringWithFormat:
-                @"以下是刚刚检索到的网络资料（共 %ld 条）。回答用户问题时请优先依据这些资料，"
-                @"并用 [1]、[2] 这样的编号标注来源；资料不足时如实说明，不要编造。\n\n%@",
+                @"【系统说明】你当前已接入实时网络：下面是客户端刚刚替你从网络检索到的真实网页内容（共 %ld 条）。"
+                @"请直接依据这些资料回答，并用 [1]、[2] 标注来源；"
+                @"不要声称自己无法联网、无法获取实时信息或要求用户自行搜索。"
+                @"资料不足时如实说明不足，不要编造。\n\n%@",
                 (long)items.count, context]
             : nil;
         dispatch_async(dispatch_get_main_queue(), ^{

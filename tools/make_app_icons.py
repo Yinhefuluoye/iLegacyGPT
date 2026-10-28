@@ -164,8 +164,10 @@ def main():
     ap.add_argument("--master", required=True, help="source image")
     ap.add_argument("--out", default=DEFAULT_OUT, help="directory for the PNGs")
     ap.add_argument("--plist", default=DEFAULT_PLIST, help="Info.plist to update")
-    ap.add_argument("--fill", type=float, default=0.86,
+    ap.add_argument("--fill", type=float, default=0.0,
                     help="fraction of the canvas the artwork should occupy (0 = keep)")
+    ap.add_argument("--exact", action="store_true",
+                    help="keep the master as drawn: pad to square, never crop")
     ap.add_argument("--flat", action="store_true",
                     help="rebuild as flat colour layers (removes JPEG noise)")
     ap.add_argument("--bg", default="auto", help="background colour 'auto' or #rrggbb")
@@ -185,7 +187,14 @@ def main():
         print("warning: master is %dx%d, 1024 square is recommended" % im.size)
     im = im.convert("RGB")
     bg = bg or corner_color(im)
-    if args.fill and args.fill > 0:
+    if args.exact:
+        w, h = im.size
+        if w != h:
+            side = max(w, h)
+            canvas = Image.new("RGB", (side, side), bg)
+            canvas.paste(im, ((side - w) // 2, (side - h) // 2))
+            im = canvas
+    elif args.fill and args.fill > 0:
         im = crop_fill(im, bg, args.fill)
     w, h = im.size
     side = min(w, h)

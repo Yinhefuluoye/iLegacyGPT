@@ -1,5 +1,8 @@
 # iLegacyGPT
 
+<p align="center"><img src="docs/assets/logo.png" width="128" alt="iLegacyGPT"></p>
+
+
 A chat client for legacy iOS devices that connects to any OpenAI-compatible API.
 There is no account, no telemetry and no backend service; the API key is stored on the device.
 

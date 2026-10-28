@@ -1,5 +1,8 @@
 # iLegacyGPT
 
+<p align="center"><img src="docs/assets/logo.png" width="128" alt="iLegacyGPT"></p>
+
+
 面向旧版 iOS 设备的对话客户端，可连接任意 OpenAI 兼容接口。
 无账号、无遥测、无服务端组件；API Key 仅保存在设备本地。
 

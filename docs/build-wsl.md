@@ -66,6 +66,7 @@ The UI bundle is generated from `web/src` by `web/build.mjs`; run that first if 
 | `iPhoneOS10.3.sdk not found` | `$HOME/theos/bin/install-sdk 10.3` |
 | `Theos not found` | `export THEOS=$HOME/theos`, or repeat step 3 |
 | build is slow under `/mnt/d` | copy the repository into the Linux filesystem before building |
+| removed resource still appears in the IPA | delete the staging directory: `rm -rf ios/.theos`, then rebuild |
 
 ## 6. Notes
 

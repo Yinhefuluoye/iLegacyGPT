@@ -66,6 +66,7 @@ NAME=iLegacyGPT VERSION=x.y.z bash tools/build_local.sh
 | `iPhoneOS10.3.sdk not found` | `$HOME/theos/bin/install-sdk 10.3` |
 | `Theos not found` | `export THEOS=$HOME/theos`，或重做第 3 步 |
 | 在 `/mnt/d` 下构建缓慢 | 先将仓库复制到 Linux 文件系统中再构建 |
+| 已删除的资源仍出现在 IPA 中 | 删除暂存目录后重新构建：`rm -rf ios/.theos` |
 
 ## 6. 说明
 

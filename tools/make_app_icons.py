@@ -39,7 +39,6 @@ SIZES = [
     ("Icon-76.png", 76),
     ("Icon-76@2x.png", 152),
     ("Icon-83.5@2x.png", 167),
-    ("Icon-1024.png", 1024),
 ]
 
 ICON_FILES = ["Icon-20", "Icon-29", "Icon-40", "Icon-76", "Icon-83.5"]
@@ -166,6 +165,8 @@ def main():
     ap.add_argument("--plist", default=DEFAULT_PLIST, help="Info.plist to update")
     ap.add_argument("--fill", type=float, default=0.0,
                     help="fraction of the canvas the artwork should occupy (0 = keep)")
+    ap.add_argument("--marketing", default=None,
+                    help="write the 1024 marketing icon to this path instead of the bundle")
     ap.add_argument("--exact", action="store_true",
                     help="keep the master as drawn: pad to square, never crop")
     ap.add_argument("--flat", action="store_true",
@@ -209,10 +210,11 @@ def main():
         icon.save(target, "PNG", optimize=True)
         print("wrote %-20s %4dx%-4d %6d B" % (name, size, size, os.path.getsize(target)))
 
-    master_img = render_flat(layers, bg, 512) if layers else im.resize((512, 512), Image.LANCZOS)
-    master_png = os.path.join(args.out, "icon-master.png")
-    master_img.save(master_png, "PNG", optimize=True)
-    print("wrote", master_png)
+    if args.marketing:
+        marketing = render_flat(layers, bg, 1024) if layers else im.resize((1024, 1024), Image.LANCZOS)
+        os.makedirs(os.path.dirname(os.path.abspath(args.marketing)), exist_ok=True)
+        marketing.save(args.marketing, "PNG", optimize=True)
+        print("wrote %-20s 1024x1024 (outside the app bundle)" % os.path.basename(args.marketing))
 
     with open(args.plist, "rb") as f:
         pl = plistlib.load(f)

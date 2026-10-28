@@ -2,6 +2,7 @@
 #import "ChatConfig.h"
 #import "ChatStore.h"
 #import "AIService.h"
+#import "AppDelegate.h"
 
 static UIImage *ScaleImageToMaxSide(UIImage *image, CGFloat maxSide) {
     if (!image) {
@@ -805,6 +806,14 @@ static id SearchValueAtPath(id object, NSString *path) {
     picker.sourceType = source;
     picker.delegate = self;
     picker.allowsEditing = NO;
+    /* UIImagePickerController presented modally on iPad rotates to portrait on its
+       own and re-lays out the page behind it. Hold the current orientation while
+       the picker is on screen, then release it on dismissal. */
+    CGSize screenSize = self.view.window ? self.view.window.bounds.size
+                                         : [UIScreen mainScreen].bounds.size;
+    [AppDelegate lockOrientation:screenSize.width > screenSize.height
+        ? (UIInterfaceOrientationMaskLandscapeLeft | UIInterfaceOrientationMaskLandscapeRight)
+        : (UIInterfaceOrientationMaskPortrait | UIInterfaceOrientationMaskPortraitUpsideDown)];
     [self presentViewController:picker animated:YES completion:nil];
 }
 
@@ -814,6 +823,8 @@ didFinishPickingMediaWithInfo:(NSDictionary *)info {
     NSString *requestId = self.pendingImageRequestId;
     self.pendingImageRequestId = nil;
     [picker dismissViewControllerAnimated:YES completion:nil];
+    [AppDelegate unlockOrientation];
+    [UIViewController attemptRotationToDeviceOrientation];
     if (!image) {
         [self sendToWeb:@{ @"type": @"cancel", @"requestId": requestId ?: @"" }];
         return;
@@ -843,6 +854,8 @@ didFinishPickingMediaWithInfo:(NSDictionary *)info {
 
 - (void)imagePickerControllerDidCancel:(UIImagePickerController *)picker {
     [picker dismissViewControllerAnimated:YES completion:nil];
+    [AppDelegate unlockOrientation];
+    [UIViewController attemptRotationToDeviceOrientation];
     NSString *requestId = self.pendingImageRequestId;
     self.pendingImageRequestId = nil;
     [self sendToWeb:@{ @"type": @"cancel", @"requestId": requestId ?: @"" }];
